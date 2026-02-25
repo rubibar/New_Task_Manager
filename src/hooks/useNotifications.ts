@@ -1,7 +1,11 @@
 import useSWR, { mutate } from "swr";
 import type { Notification } from "@/types";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  });
 
 export function useNotifications() {
   const { data, error, isLoading } = useSWR<Notification[]>(

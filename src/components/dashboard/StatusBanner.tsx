@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { isThursdayMeetingMode, isSundayRDTime } from "@/lib/business-hours";
 import useSWR from "swr";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  });
 
 export function StatusBanner() {
   const [thursdayMode, setThursdayMode] = useState(false);

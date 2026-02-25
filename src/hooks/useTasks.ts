@@ -1,7 +1,11 @@
 import useSWR, { mutate } from "swr";
 import type { TaskWithRelations, CreateTaskInput, UpdateTaskInput } from "@/types";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  });
 
 export function useTasks(filters?: Record<string, string>) {
   const params = new URLSearchParams(filters || {});
