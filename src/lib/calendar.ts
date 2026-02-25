@@ -2,7 +2,9 @@ import { google } from "googleapis";
 import { prisma } from "./prisma";
 import type { Task, TaskType } from "@prisma/client";
 
-const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID!;
+// Use user's primary calendar for task CRUD; group calendar for cron sync
+const CALENDAR_ID = "primary";
+const SHARED_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || "primary";
 
 // Google Calendar color IDs mapped to task types
 const TYPE_COLORS: Record<TaskType, string> = {
@@ -159,7 +161,7 @@ export async function syncCalendarEvents(): Promise<void> {
     const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
     const response = await calendar.events.list({
-      calendarId: CALENDAR_ID,
+      calendarId: SHARED_CALENDAR_ID,
       timeMin: twoWeeksAgo.toISOString(),
       timeMax: twoWeeksFromNow.toISOString(),
       singleEvents: true,

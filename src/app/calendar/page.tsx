@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { useTasks } from "@/hooks/useTasks";
+import { useTasks, updateTask } from "@/hooks/useTasks";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
@@ -23,6 +23,17 @@ export default function CalendarPage() {
     : tasks;
 
   const activeTasks = filteredTasks.filter((t) => t.status !== "DONE");
+
+  const handleDatesChange = useCallback(
+    async (taskId: string, startDate: string, deadline: string) => {
+      try {
+        await updateTask(taskId, { startDate, deadline });
+      } catch (err) {
+        console.error("Failed to update task dates:", err);
+      }
+    },
+    []
+  );
 
   if (isLoading) {
     return (
@@ -66,7 +77,11 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <CalendarView tasks={activeTasks} onTaskClick={setSelectedTask} />
+      <CalendarView
+        tasks={activeTasks}
+        onTaskClick={setSelectedTask}
+        onTaskDatesChange={handleDatesChange}
+      />
 
       <TaskDetailDrawer
         task={selectedTask}
