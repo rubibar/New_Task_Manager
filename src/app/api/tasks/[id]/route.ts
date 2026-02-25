@@ -63,8 +63,12 @@ export async function PATCH(
     },
   });
 
-  // Sync to calendar
-  await updateCalendarEvent(task);
+  // Sync to calendar (use current user's token)
+  const currentUser = await prisma.user.findUnique({
+    where: { email: session.user.email.toLowerCase() },
+    select: { id: true },
+  });
+  await updateCalendarEvent(task, currentUser?.id);
 
   return NextResponse.json(task);
 }
@@ -87,9 +91,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
 
-  // Delete calendar event
+  // Delete calendar event (use current user's token)
   if (task.calendarEventId) {
-    await deleteCalendarEvent(task.calendarEventId, task.ownerId);
+    const delUser = await prisma.user.findUnique({
+      where: { email: session.user.email.toLowerCase() },
+      select: { id: true },
+    });
+    await deleteCalendarEvent(task.calendarEventId, task.ownerId, delUser?.id);
   }
 
   await prisma.task.delete({ where: { id: params.id } });

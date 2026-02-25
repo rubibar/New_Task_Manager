@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import {
   startOfWeek,
   endOfWeek,
@@ -8,6 +8,7 @@ import {
   eachWeekOfInterval,
   format,
   differenceInDays,
+  addDays,
   isToday,
   addWeeks,
   subWeeks,
@@ -18,6 +19,11 @@ interface GanttChartProps {
   tasks: TaskWithRelations[];
   groupBy: "project" | "owner";
   onTaskClick: (task: TaskWithRelations) => void;
+  onTaskDatesChange?: (
+    taskId: string,
+    startDate: string,
+    deadline: string
+  ) => void;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -30,9 +36,27 @@ const DAY_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 56;
 
-export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
+type DragMode = "move" | "resize-start" | "resize-end";
+
+interface DragState {
+  taskId: string;
+  mode: DragMode;
+  startX: number;
+  originalStart: Date;
+  originalEnd: Date;
+  daysDelta: number;
+}
+
+export function GanttChart({
+  tasks,
+  groupBy,
+  onTaskClick,
+  onTaskDatesChange,
+}: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewWeeks, setViewWeeks] = useState(4);
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const dragRef = useRef<DragState | null>(null);
 
   const now = new Date();
   const viewStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 0 });
@@ -40,7 +64,8 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
 
   const days = useMemo(
     () => eachDayOfInterval({ start: viewStart, end: viewEnd }),
-    [viewStart, viewEnd]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewStart.getTime(), viewEnd.getTime()]
   );
 
   const weeks = useMemo(
@@ -49,14 +74,18 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
         { start: viewStart, end: viewEnd },
         { weekStartsOn: 0 }
       ),
-    [viewStart, viewEnd]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewStart.getTime(), viewEnd.getTime()]
   );
 
   const totalWidth = days.length * DAY_WIDTH;
 
   // Group tasks
   const groups = useMemo(() => {
-    const map = new Map<string, { label: string; tasks: TaskWithRelations[] }>();
+    const map = new Map<
+      string,
+      { label: string; tasks: TaskWithRelations[] }
+    >();
 
     for (const task of tasks) {
       let key: string;
@@ -77,14 +106,125 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
     return Array.from(map.values());
   }, [tasks, groupBy]);
 
-  const getBarPosition = (start: Date, end: Date) => {
-    const startOffset = differenceInDays(start, viewStart);
-    const duration = Math.max(1, differenceInDays(end, start));
-    return {
-      left: startOffset * DAY_WIDTH,
-      width: duration * DAY_WIDTH,
+  const getBarPosition = useCallback(
+    (start: Date, end: Date) => {
+      const startOffset = differenceInDays(start, viewStart);
+      const duration = Math.max(1, differenceInDays(end, start));
+      return {
+        left: startOffset * DAY_WIDTH,
+        width: duration * DAY_WIDTH,
+      };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewStart.getTime()]
+  );
+
+  // Get adjusted dates for a task while dragging
+  const getDraggedDates = useCallback(
+    (task: TaskWithRelations) => {
+      if (!drag || drag.taskId !== task.id) return null;
+      const { mode, originalStart, originalEnd, daysDelta } = drag;
+
+      let newStart = originalStart;
+      let newEnd = originalEnd;
+
+      if (mode === "move") {
+        newStart = addDays(originalStart, daysDelta);
+        newEnd = addDays(originalEnd, daysDelta);
+      } else if (mode === "resize-start") {
+        newStart = addDays(originalStart, daysDelta);
+        if (newStart >= newEnd) newStart = addDays(newEnd, -1);
+      } else if (mode === "resize-end") {
+        newEnd = addDays(originalEnd, daysDelta);
+        if (newEnd <= newStart) newEnd = addDays(newStart, 1);
+      }
+
+      return { start: newStart, end: newEnd };
+    },
+    [drag]
+  );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent, task: TaskWithRelations, mode: DragMode) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const state: DragState = {
+        taskId: task.id,
+        mode,
+        startX: e.clientX,
+        originalStart: new Date(task.startDate),
+        originalEnd: new Date(task.deadline),
+        daysDelta: 0,
+      };
+
+      dragRef.current = state;
+      setDrag(state);
+    },
+    []
+  );
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!dragRef.current) return;
+
+    const deltaX = e.clientX - dragRef.current.startX;
+    const daysDelta = Math.round(deltaX / DAY_WIDTH);
+
+    if (daysDelta !== dragRef.current.daysDelta) {
+      const newState = { ...dragRef.current, daysDelta };
+      dragRef.current = newState;
+      setDrag(newState);
+    }
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    if (!dragRef.current) return;
+
+    const { taskId, mode, originalStart, originalEnd, daysDelta } =
+      dragRef.current;
+
+    if (daysDelta !== 0 && onTaskDatesChange) {
+      let newStart = originalStart;
+      let newEnd = originalEnd;
+
+      if (mode === "move") {
+        newStart = addDays(originalStart, daysDelta);
+        newEnd = addDays(originalEnd, daysDelta);
+      } else if (mode === "resize-start") {
+        newStart = addDays(originalStart, daysDelta);
+        if (newStart >= newEnd) newStart = addDays(newEnd, -1);
+      } else if (mode === "resize-end") {
+        newEnd = addDays(originalEnd, daysDelta);
+        if (newEnd <= newStart) newEnd = addDays(newStart, 1);
+      }
+
+      onTaskDatesChange(
+        taskId,
+        newStart.toISOString(),
+        newEnd.toISOString()
+      );
+    }
+
+    dragRef.current = null;
+    setDrag(null);
+  }, [onTaskDatesChange]);
+
+  // Global mouse handlers for drag
+  useEffect(() => {
+    if (drag) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = drag.mode === "move" ? "grabbing" : "ew-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
-  };
+  }, [drag, handleMouseMove, handleMouseUp]);
 
   const todayOffset = differenceInDays(now, viewStart) * DAY_WIDTH;
 
@@ -106,10 +246,15 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
             {w}w
           </button>
         ))}
+        {onTaskDatesChange && (
+          <span className="text-[10px] text-slate-400 ml-auto">
+            Drag bars to reschedule
+          </span>
+        )}
       </div>
 
       <div ref={containerRef} className="overflow-x-auto">
-        <div style={{ width: totalWidth, minWidth: "100%" }}>
+        <div style={{ width: totalWidth, minWidth: "100%" }} className="relative">
           {/* Week headers */}
           <div
             className="flex border-b border-slate-200 sticky top-0 bg-white z-10"
@@ -119,9 +264,7 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
               const weekDays = eachDayOfInterval({
                 start: week,
                 end: endOfWeek(week, { weekStartsOn: 0 }),
-              }).filter(
-                (d) => d >= viewStart && d <= viewEnd
-              );
+              }).filter((d) => d >= viewStart && d <= viewEnd);
 
               return (
                 <div
@@ -167,10 +310,16 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
 
               {/* Task bars */}
               {group.tasks.map((task) => {
-                const pos = getBarPosition(
-                  new Date(task.startDate),
-                  new Date(task.deadline)
-                );
+                const dragged = getDraggedDates(task);
+                const taskStart = dragged
+                  ? dragged.start
+                  : new Date(task.startDate);
+                const taskEnd = dragged
+                  ? dragged.end
+                  : new Date(task.deadline);
+                const pos = getBarPosition(taskStart, taskEnd);
+                const isDragging =
+                  drag?.taskId === task.id;
 
                 return (
                   <div
@@ -179,7 +328,7 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
                     style={{ height: ROW_HEIGHT }}
                   >
                     {/* Grid lines */}
-                    <div className="absolute inset-0 flex">
+                    <div className="absolute inset-0 flex pointer-events-none">
                       {days.map((day) => (
                         <div
                           key={day.toISOString()}
@@ -193,25 +342,77 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
 
                     {/* Bar */}
                     <div
-                      onClick={() => onTaskClick(task)}
                       className={`
-                        absolute top-1 cursor-pointer rounded border
-                        flex items-center px-2 truncate
-                        hover:opacity-80 transition-opacity
+                        absolute top-1 rounded border flex items-center
+                        transition-shadow select-none
                         ${TYPE_COLORS[task.type] || "bg-slate-200 border-slate-300"}
                         ${task.emergency ? "ring-1 ring-red-500" : ""}
+                        ${isDragging ? "shadow-lg opacity-90 z-30" : "hover:shadow-md z-10"}
                       `}
                       style={{
                         left: pos.left,
                         width: Math.max(pos.width, DAY_WIDTH),
                         height: ROW_HEIGHT - 8,
                       }}
-                      title={`${task.title} (${format(new Date(task.startDate), "MMM d")} - ${format(new Date(task.deadline), "MMM d")})`}
+                      title={`${task.title} (${format(taskStart, "MMM d")} - ${format(taskEnd, "MMM d")})`}
                     >
-                      <span className="text-[10px] font-medium text-slate-700 truncate">
-                        {task.title}
-                      </span>
+                      {/* Left resize handle */}
+                      {onTaskDatesChange && (
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-black/10 rounded-l z-20"
+                          onMouseDown={(e) =>
+                            handleMouseDown(e, task, "resize-start")
+                          }
+                        />
+                      )}
+
+                      {/* Main bar body — draggable to move */}
+                      <div
+                        className={`flex-1 px-2 truncate ${
+                          onTaskDatesChange
+                            ? "cursor-grab active:cursor-grabbing"
+                            : "cursor-pointer"
+                        }`}
+                        onMouseDown={(e) => {
+                          if (onTaskDatesChange) {
+                            handleMouseDown(e, task, "move");
+                          }
+                        }}
+                        onClick={(e) => {
+                          if (!drag) {
+                            e.stopPropagation();
+                            onTaskClick(task);
+                          }
+                        }}
+                      >
+                        <span className="text-[10px] font-medium text-slate-700 truncate">
+                          {task.title}
+                        </span>
+                      </div>
+
+                      {/* Right resize handle */}
+                      {onTaskDatesChange && (
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-black/10 rounded-r z-20"
+                          onMouseDown={(e) =>
+                            handleMouseDown(e, task, "resize-end")
+                          }
+                        />
+                      )}
                     </div>
+
+                    {/* Date tooltip while dragging */}
+                    {isDragging && dragged && (
+                      <div
+                        className="absolute -top-6 bg-slate-800 text-white text-[9px] px-2 py-0.5 rounded whitespace-nowrap z-40 pointer-events-none"
+                        style={{
+                          left: pos.left,
+                        }}
+                      >
+                        {format(dragged.start, "MMM d")} -{" "}
+                        {format(dragged.end, "MMM d")}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -220,12 +421,11 @@ export function GanttChart({ tasks, groupBy, onTaskClick }: GanttChartProps) {
 
           {/* Today marker */}
           <div
-            className="absolute top-0 bottom-0 w-0.5 bg-red-400 z-20 pointer-events-none"
+            className="absolute top-0 w-0.5 bg-red-400 z-20 pointer-events-none"
             style={{
               left: todayOffset,
               top: 0,
               height: "100%",
-              position: "absolute",
             }}
           />
         </div>

@@ -78,10 +78,11 @@ function buildEventBody(
 }
 
 export async function createCalendarEvent(
-  task: Task & { project?: { name: string } | null; owner?: { name: string } | null }
+  task: Task & { project?: { name: string } | null; owner?: { name: string } | null },
+  authUserId?: string
 ): Promise<string | null> {
   try {
-    const auth = await getAuthClient(task.ownerId);
+    const auth = await getAuthClient(authUserId || task.ownerId);
     const calendar = google.calendar({ version: "v3", auth });
     const event = buildEventBody(task);
 
@@ -98,12 +99,13 @@ export async function createCalendarEvent(
 }
 
 export async function updateCalendarEvent(
-  task: Task & { project?: { name: string } | null; owner?: { name: string } | null }
+  task: Task & { project?: { name: string } | null; owner?: { name: string } | null },
+  authUserId?: string
 ): Promise<void> {
   if (!task.calendarEventId) return;
 
   try {
-    const auth = await getAuthClient(task.ownerId);
+    const auth = await getAuthClient(authUserId || task.ownerId);
     const calendar = google.calendar({ version: "v3", auth });
     const event = buildEventBody(task);
 
@@ -119,10 +121,11 @@ export async function updateCalendarEvent(
 
 export async function deleteCalendarEvent(
   calendarEventId: string,
-  userId: string
+  userId: string,
+  authUserId?: string
 ): Promise<void> {
   try {
-    const auth = await getAuthClient(userId);
+    const auth = await getAuthClient(authUserId || userId);
     const calendar = google.calendar({ version: "v3", auth });
 
     await calendar.events.delete({

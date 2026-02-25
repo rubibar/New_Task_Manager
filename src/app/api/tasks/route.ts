@@ -98,20 +98,20 @@ export async function POST(request: NextRequest) {
     data: { rawScore: breakdown.rawScore },
   });
 
-  // Create calendar event
-  const calendarEventId = await createCalendarEvent(task);
+  // Find current user for calendar auth + notifications
+  const currentUser = await prisma.user.findUnique({
+    where: { email: session.user.email.toLowerCase() },
+    select: { id: true },
+  });
+
+  // Create calendar event (use current user's token, not task owner's)
+  const calendarEventId = await createCalendarEvent(task, currentUser?.id);
   if (calendarEventId) {
     await prisma.task.update({
       where: { id: task.id },
       data: { calendarEventId },
     });
   }
-
-  // Notify assigned users
-  const currentUser = await prisma.user.findUnique({
-    where: { email: session.user.email.toLowerCase() },
-    select: { id: true },
-  });
 
   if (currentUser && ownerId !== currentUser.id) {
     await notifyTaskAssigned(ownerId, title, "owner", task.id);

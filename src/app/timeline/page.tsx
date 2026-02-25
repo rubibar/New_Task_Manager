@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useTasks } from "@/hooks/useTasks";
+import { useState, useCallback } from "react";
+import { useTasks, updateTask } from "@/hooks/useTasks";
 import { GanttChart } from "@/components/timeline/GanttChart";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import type { TaskWithRelations } from "@/types";
@@ -14,6 +14,17 @@ export default function TimelinePage() {
   );
 
   const activeTasks = tasks.filter((t) => t.status !== "DONE");
+
+  const handleDatesChange = useCallback(
+    async (taskId: string, startDate: string, deadline: string) => {
+      try {
+        await updateTask(taskId, { startDate, deadline });
+      } catch (err) {
+        console.error("Failed to update task dates:", err);
+      }
+    },
+    []
+  );
 
   if (isLoading) {
     return (
@@ -64,6 +75,7 @@ export default function TimelinePage() {
           tasks={activeTasks}
           groupBy={groupBy}
           onTaskClick={setSelectedTask}
+          onTaskDatesChange={handleDatesChange}
         />
       )}
 
