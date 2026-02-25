@@ -18,6 +18,17 @@ const navItems = [
     ),
   },
   {
+    href: "/calendar",
+    label: "Calendar",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
+        <rect x="7" y="14" width="3" height="3" rx="0.5" fill="currentColor" opacity="0.3" />
+      </svg>
+    ),
+  },
+  {
     href: "/timeline",
     label: "Timeline",
     icon: (
