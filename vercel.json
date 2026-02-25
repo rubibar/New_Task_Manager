@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/recalculate-scores",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-calendar",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/thursday-freeze",
+      "schedule": "0 11 * * 4"
+    }
+  ]
+}

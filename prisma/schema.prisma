@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  image         String?
+  accessToken   String?   @db.Text
+  refreshToken  String?   @db.Text
+  tokenExpiry   DateTime?
+  atCapacity    Boolean   @default(false)
+
+  ownedTasks    Task[]    @relation("TaskOwner")
+  reviewTasks   Task[]    @relation("TaskReviewer")
+  accounts      Account[]
+  sessions      Session[]
+  notifications Notification[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  color       String        @default("#C8FF00")
+  status      ProjectStatus @default(ACTIVE)
+  tasks       Task[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Task {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?      @db.Text
+
+  type            TaskType     @default(CLIENT)
+  priority        Priority     @default(IMPORTANT_NOT_URGENT)
+  status          TaskStatus   @default(TODO)
+
+  ownerId         String
+  owner           User         @relation("TaskOwner", fields: [ownerId], references: [id])
+  reviewerId      String?
+  reviewer        User?        @relation("TaskReviewer", fields: [reviewerId], references: [id])
+
+  startDate       DateTime
+  deadline        DateTime
+
+  emergency       Boolean      @default(false)
+  isFrozen        Boolean      @default(false)
+
+  projectId       String?
+  project         Project?     @relation(fields: [projectId], references: [id])
+
+  calendarEventId String?      @unique
+
+  rawScore        Float        @default(0)
+  displayScore    Float        @default(0)
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  todoSince       DateTime?
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  taskId    String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+enum TaskType {
+  CLIENT
+  INTERNAL_RD
+  ADMIN
+}
+
+enum Priority {
+  URGENT_IMPORTANT
+  IMPORTANT_NOT_URGENT
+  URGENT_NOT_IMPORTANT
+  NEITHER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum NotificationType {
+  REVIEW_REQUEST
+  DEADLINE_APPROACHING
+  EMERGENCY_TASK
+  THURSDAY_FREEZE
+  SCORE_CHANGE
+  TASK_ASSIGNED
+  CALENDAR_SYNC
+}
