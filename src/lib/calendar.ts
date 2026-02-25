@@ -2,9 +2,8 @@ import { google } from "googleapis";
 import { prisma } from "./prisma";
 import type { Task, TaskType } from "@prisma/client";
 
-// Use user's primary calendar for task CRUD; group calendar for cron sync
+// Use user's primary calendar for all operations
 const CALENDAR_ID = "primary";
-const SHARED_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || "primary";
 
 // Google Calendar color IDs mapped to task types
 const TYPE_COLORS: Record<TaskType, string> = {
@@ -139,75 +138,103 @@ export async function deleteCalendarEvent(
   }
 }
 
+/**
+ * Bidirectional sync: for each user with tokens, read their primary calendar
+ * and update linked tasks if dates were changed in Google Calendar.
+ */
 export async function syncCalendarEvents(): Promise<void> {
-  // Get first available user for API calls
-  const user = await prisma.user.findFirst({
+  // Get all users with valid tokens
+  const users = await prisma.user.findMany({
     where: { accessToken: { not: null } },
     select: { id: true },
   });
 
-  if (!user) {
-    console.error("No user with access token for calendar sync");
+  if (users.length === 0) {
+    console.error("No users with access tokens for calendar sync");
     return;
   }
 
-  try {
-    const auth = await getAuthClient(user.id);
-    const calendar = google.calendar({ version: "v3", auth });
+  // Get all tasks that have a linked calendar event
+  const linkedTasks = await prisma.task.findMany({
+    where: { calendarEventId: { not: null } },
+    select: { id: true, calendarEventId: true, startDate: true, deadline: true, ownerId: true },
+  });
 
-    // Fetch recent events from the shared calendar
-    const now = new Date();
-    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  if (linkedTasks.length === 0) return;
 
-    const response = await calendar.events.list({
-      calendarId: SHARED_CALENDAR_ID,
-      timeMin: twoWeeksAgo.toISOString(),
-      timeMax: twoWeeksFromNow.toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-    });
+  // Build a map of calendarEventId -> task for quick lookup
+  const taskByEventId = new Map(
+    linkedTasks.map((t) => [t.calendarEventId!, t])
+  );
 
-    const events = response.data.items || [];
+  // For each user, fetch their primary calendar events and check for changes
+  for (const user of users) {
+    try {
+      const auth = await getAuthClient(user.id);
+      const calendar = google.calendar({ version: "v3", auth });
 
-    for (const event of events) {
-      if (!event.id || !event.summary) continue;
+      const now = new Date();
+      const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
+      const fourWeeksFromNow = new Date(now.getTime() + 28 * 24 * 60 * 60 * 1000);
 
-      // Check if this event is already linked to a task
-      const existingTask = await prisma.task.findUnique({
-        where: { calendarEventId: event.id },
+      const response = await calendar.events.list({
+        calendarId: CALENDAR_ID,
+        timeMin: fourWeeksAgo.toISOString(),
+        timeMax: fourWeeksFromNow.toISOString(),
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 250,
       });
 
-      if (existingTask) {
-        // Update task dates if changed in calendar
+      const events = response.data.items || [];
+
+      for (const event of events) {
+        if (!event.id) continue;
+
+        const task = taskByEventId.get(event.id);
+        if (!task) continue;
+
+        // Check if dates changed in Google Calendar
         const eventStart = event.start?.dateTime
           ? new Date(event.start.dateTime)
-          : null;
+          : event.start?.date
+            ? new Date(event.start.date)
+            : null;
         const eventEnd = event.end?.dateTime
           ? new Date(event.end.dateTime)
-          : null;
+          : event.end?.date
+            ? new Date(event.end.date)
+            : null;
 
         if (eventStart && eventEnd) {
           const startChanged =
-            existingTask.startDate.getTime() !== eventStart.getTime();
+            Math.abs(task.startDate.getTime() - eventStart.getTime()) > 60000;
           const endChanged =
-            existingTask.deadline.getTime() !== eventEnd.getTime();
+            Math.abs(task.deadline.getTime() - eventEnd.getTime()) > 60000;
 
           if (startChanged || endChanged) {
             await prisma.task.update({
-              where: { id: existingTask.id },
+              where: { id: task.id },
               data: {
                 startDate: eventStart,
                 deadline: eventEnd,
               },
             });
+            console.log(`Synced task ${task.id} dates from Google Calendar`);
           }
         }
+
+        // Check if event was cancelled/deleted
+        if (event.status === "cancelled") {
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { calendarEventId: null },
+          });
+          console.log(`Unlinked cancelled calendar event from task ${task.id}`);
+        }
       }
-      // Note: New calendar events without matching tasks could be handled here
-      // but we skip auto-creation for safety — users should create tasks in-app
+    } catch (error) {
+      console.error(`Calendar sync failed for user ${user.id}:`, error);
     }
-  } catch (error) {
-    console.error("Calendar sync failed:", error);
   }
 }
