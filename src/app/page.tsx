@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useTasks } from "@/hooks/useTasks";
 import { useFilters } from "@/hooks/useFilters";
+import { useBatchSelection } from "@/hooks/useBatchSelection";
 import { Spotlight } from "@/components/dashboard/Spotlight";
 import { HeatmapGrid } from "@/components/dashboard/HeatmapGrid";
 import { ReviewBar } from "@/components/dashboard/ReviewBar";
 import { StatusBanner } from "@/components/dashboard/StatusBanner";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
+import { BatchActionBar } from "@/components/tasks/BatchActionBar";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Button } from "@/components/ui/Button";
 import type { TaskWithRelations } from "@/types";
@@ -18,10 +20,12 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const { tasks, isLoading } = useTasks();
   const { filters, updateFilter, clearFilters, hasActiveFilters, activeFilterCount, applyFilters } = useFilters();
+  const batch = useBatchSelection();
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(
     null
   );
   const [createOpen, setCreateOpen] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
 
   const userId = (session as unknown as Record<string, unknown>)?.userId as
     | string
@@ -85,7 +89,22 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-800">Dashboard</h1>
-        <Button onClick={() => setCreateOpen(true)}>+ New Task</Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setBatchMode(!batchMode);
+              if (batchMode) batch.clearSelection();
+            }}
+            className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+              batchMode
+                ? "bg-[#C8FF00] text-slate-900"
+                : "text-slate-500 hover:bg-slate-100"
+            }`}
+          >
+            {batchMode ? "Exit Select" : "Select"}
+          </button>
+          <Button onClick={() => setCreateOpen(true)}>+ New Task</Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -107,7 +126,13 @@ export default function DashboardPage() {
             task={topTask}
             onClick={() => topTask && setSelectedTask(topTask)}
           />
-          <HeatmapGrid tasks={restTasks} onTaskClick={setSelectedTask} />
+          <HeatmapGrid
+            tasks={restTasks}
+            onTaskClick={setSelectedTask}
+            selectable={batchMode}
+            isSelected={batch.isSelected}
+            onToggleSelect={batch.toggle}
+          />
         </div>
 
         {userId && (
@@ -126,6 +151,18 @@ export default function DashboardPage() {
       <CreateTaskModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+      />
+
+      {/* Batch Action Bar */}
+      <BatchActionBar
+        selectedCount={batch.count}
+        selectedIds={batch.selectedIds}
+        onClearSelection={() => {
+          batch.clearSelection();
+          setBatchMode(false);
+        }}
+        allTaskIds={activeTasks.map((t) => t.id)}
+        onSelectAll={batch.selectAll}
       />
     </div>
   );

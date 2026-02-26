@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { MobileNav } from "./MobileNav";
+import { AIAssistant } from "@/components/ai/AIAssistant";
 
 const publicPaths = ["/login", "/unauthorized"];
 
@@ -31,6 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <MobileNav />
+      <AIAssistant />
     </div>
   );
 }

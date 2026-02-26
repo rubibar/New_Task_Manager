@@ -16,9 +16,12 @@ import type { TaskWithRelations } from "@/types";
 interface TaskCardProps {
   task: TaskWithRelations;
   onClick: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function TaskCard({ task, onClick }: TaskCardProps) {
+export function TaskCard({ task, onClick, selectable, selected, onToggleSelect }: TaskCardProps) {
   const heatClass = getHeatBgClass(task.displayScore);
 
   return (
@@ -34,8 +37,29 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         hover:shadow-md transition-shadow duration-150
         ${heatClass}
         ${task.emergency ? "ring-2 ring-red-500 animate-pulse" : ""}
+        ${selected ? "ring-2 ring-[#C8FF00]" : ""}
       `}
     >
+      {selectable && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.(task.id);
+          }}
+          className={`absolute top-2 left-2 w-5 h-5 rounded border-2 flex items-center justify-center z-10 transition-colors ${
+            selected
+              ? "bg-[#C8FF00] border-[#C8FF00]"
+              : "border-slate-300 bg-white hover:border-slate-400"
+          }`}
+        >
+          {selected && (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1e293b" strokeWidth="3">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          )}
+        </button>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-slate-800 truncate">

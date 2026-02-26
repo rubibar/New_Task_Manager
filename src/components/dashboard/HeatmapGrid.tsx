@@ -7,9 +7,18 @@ import type { TaskWithRelations } from "@/types";
 interface HeatmapGridProps {
   tasks: TaskWithRelations[];
   onTaskClick: (task: TaskWithRelations) => void;
+  selectable?: boolean;
+  isSelected?: (id: string) => boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function HeatmapGrid({ tasks, onTaskClick }: HeatmapGridProps) {
+export function HeatmapGrid({
+  tasks,
+  onTaskClick,
+  selectable,
+  isSelected,
+  onToggleSelect,
+}: HeatmapGridProps) {
   if (tasks.length === 0) {
     return (
       <div className="text-center py-12">
@@ -26,6 +35,9 @@ export function HeatmapGrid({ tasks, onTaskClick }: HeatmapGridProps) {
             key={task.id}
             task={task}
             onClick={() => onTaskClick(task)}
+            selectable={selectable}
+            selected={isSelected?.(task.id)}
+            onToggleSelect={onToggleSelect}
           />
         ))}
       </AnimatePresence>
