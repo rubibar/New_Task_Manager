@@ -16,6 +16,9 @@ export async function GET() {
       email: true,
       image: true,
       atCapacity: true,
+      role: true,
+      skills: true,
+      weeklyCapacityHours: true,
     },
     orderBy: { name: "asc" },
   });

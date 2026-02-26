@@ -20,6 +20,7 @@ export async function PATCH(
   if (body.color !== undefined) updateData.color = body.color;
   if (body.status !== undefined) updateData.status = body.status;
   if (body.clientName !== undefined) updateData.clientName = body.clientName;
+  if (body.clientId !== undefined) updateData.clientId = body.clientId || null;
   if (body.projectTypeId !== undefined) updateData.projectTypeId = body.projectTypeId || null;
   if (body.startDate !== undefined) updateData.startDate = body.startDate ? new Date(body.startDate) : null;
   if (body.targetFinishDate !== undefined) updateData.targetFinishDate = body.targetFinishDate ? new Date(body.targetFinishDate) : null;

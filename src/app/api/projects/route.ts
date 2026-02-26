@@ -18,6 +18,7 @@ export async function GET() {
       projectType: true,
       deliverables: true,
       milestones: true,
+      client: true,
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     description,
     color,
     clientName,
+    clientId,
     projectTypeId,
     startDate,
     targetFinishDate,
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
       description,
       color: color || "#C8FF00",
       clientName: clientName || undefined,
+      clientId: clientId || undefined,
       projectTypeId: projectTypeId || undefined,
       startDate: startDate ? new Date(startDate) : undefined,
       targetFinishDate: targetFinishDate ? new Date(targetFinishDate) : undefined,
@@ -66,6 +69,7 @@ export async function POST(request: NextRequest) {
     },
     include: {
       projectType: true,
+      client: true,
     },
   });
 

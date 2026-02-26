@@ -16,6 +16,16 @@ import type {
   TaskTemplateCategory,
   FolderTemplate,
   Milestone,
+  Client,
+  ClientStatus,
+  ClientType,
+  ClientSource,
+  ClientContact,
+  CommunicationLog,
+  CommunicationLogType,
+  Invoice,
+  InvoiceStatus,
+  AIInsightCache,
 } from "@prisma/client";
 
 export type {
@@ -36,6 +46,16 @@ export type {
   TaskTemplateCategory,
   FolderTemplate,
   Milestone,
+  Client,
+  ClientStatus,
+  ClientType,
+  ClientSource,
+  ClientContact,
+  CommunicationLog,
+  CommunicationLogType,
+  Invoice,
+  InvoiceStatus,
+  AIInsightCache,
 };
 
 export type TaskWithRelations = Task & {
@@ -49,6 +69,7 @@ export type ProjectWithTasks = Project & {
   deliverables?: Deliverable[];
   milestones?: Milestone[];
   projectType?: ProjectType | null;
+  client?: Client | null;
   _count?: { tasks: number };
 };
 
@@ -59,11 +80,29 @@ export type DeliverableWithRelations = Deliverable & {
   })[];
 };
 
+export type ClientWithRelations = Client & {
+  contacts: ClientContact[];
+  projects: (Project & { _count?: { tasks: number } })[];
+  invoices: Invoice[];
+  communications: CommunicationLog[];
+  _count?: {
+    projects: number;
+    invoices: number;
+    communications: number;
+  };
+};
+
+export type InvoiceWithRelations = Invoice & {
+  client: Pick<Client, "id" | "name">;
+  project: Pick<Project, "id" | "name"> | null;
+};
+
 export interface CreateProjectInput {
   name: string;
   description?: string;
   color?: string;
   clientName?: string;
+  clientId?: string;
   projectTypeId?: string;
   startDate?: string;
   targetFinishDate?: string;
@@ -89,7 +128,7 @@ export interface CreateMilestoneInput {
 
 export type UserWithCapacity = Pick<
   User,
-  "id" | "name" | "email" | "image" | "atCapacity"
+  "id" | "name" | "email" | "image" | "atCapacity" | "role" | "skills" | "weeklyCapacityHours"
 >;
 
 export interface ScoreBreakdown {
@@ -131,4 +170,11 @@ export interface UpdateTaskInput {
   startDate?: string;
   deadline?: string;
   emergency?: boolean;
+}
+
+export interface LineItem {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
 }

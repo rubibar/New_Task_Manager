@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useClients } from "@/hooks/useClients";
+import { Button } from "@/components/ui/Button";
 import type { ProjectType } from "@/types";
 
 const COLORS = [
@@ -17,6 +19,7 @@ const STATUS_OPTIONS = [
 export interface Step1Data {
   name: string;
   clientName: string;
+  clientId: string;
   description: string;
   projectTypeId: string;
   startDate: string;
@@ -40,28 +43,29 @@ export function Step1Details({
   data,
   onChange,
   projectTypes,
-  clientNames,
   errors,
 }: Step1Props) {
-  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
-  const clientInputRef = useRef<HTMLInputElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const [clientSearch, setClientSearch] = useState(data.clientName || "");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddName, setQuickAddName] = useState("");
+  const [quickAddEmail, setQuickAddEmail] = useState("");
+  const [quickAddContact, setQuickAddContact] = useState("");
+  const [quickAddLoading, setQuickAddLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const filteredClients = clientNames.filter(
-    (name) =>
-      name.toLowerCase().includes(data.clientName.toLowerCase()) &&
-      name.toLowerCase() !== data.clientName.toLowerCase()
-  );
+  const { clients } = useClients({ search: clientSearch });
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(e.target as Node) &&
-        clientInputRef.current &&
-        !clientInputRef.current.contains(e.target as Node)
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
       ) {
-        setShowClientSuggestions(false);
+        setShowDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -72,10 +76,67 @@ export function Step1Details({
     onChange({ ...data, [field]: value });
   };
 
+  const selectClient = (client: { id: string; name: string }) => {
+    onChange({ ...data, clientId: client.id, clientName: client.name });
+    setClientSearch(client.name);
+    setShowDropdown(false);
+  };
+
+  const clearClient = () => {
+    onChange({ ...data, clientId: "", clientName: "" });
+    setClientSearch("");
+  };
+
+  const handleQuickAdd = async () => {
+    if (!quickAddName.trim()) return;
+    setQuickAddLoading(true);
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: quickAddName.trim(),
+          email: quickAddEmail.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to create client");
+      const newClient = await res.json();
+
+      // Create primary contact if provided
+      if (quickAddContact.trim()) {
+        await fetch(`/api/clients/${newClient.id}/contacts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: quickAddContact.trim(),
+            email: quickAddEmail.trim() || undefined,
+            isPrimary: true,
+          }),
+        });
+      }
+
+      selectClient({ id: newClient.id, name: newClient.name });
+      setShowQuickAdd(false);
+      setQuickAddName("");
+      setQuickAddEmail("");
+      setQuickAddContact("");
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setQuickAddLoading(false);
+    }
+  };
+
   const inputClass = (field: string) =>
     `w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-[#C8FF00] focus:border-transparent ${
       errors[field] ? "border-red-300 bg-red-50" : "border-slate-200"
     }`;
+
+  // Find primary contact for matched clients
+  const getContactInfo = (client: { contacts?: { name: string; isPrimary: boolean }[] }) => {
+    const primary = client.contacts?.find((c: { isPrimary: boolean }) => c.isPrimary);
+    return primary?.name || client.contacts?.[0]?.name || "";
+  };
 
   return (
     <div className="space-y-5">
@@ -96,44 +157,148 @@ export function Step1Details({
         )}
       </div>
 
-      {/* Client Name with autocomplete */}
+      {/* Client — CRM-linked searchable dropdown */}
       <div className="flex flex-col gap-1.5 relative">
         <label className="text-sm font-medium text-slate-700">
-          Client Name <span className="text-red-400">*</span>
+          Client <span className="text-red-400">*</span>
         </label>
-        <input
-          ref={clientInputRef}
-          type="text"
-          value={data.clientName}
-          onChange={(e) => {
-            update("clientName", e.target.value);
-            setShowClientSuggestions(true);
-          }}
-          onFocus={() => setShowClientSuggestions(true)}
-          placeholder="e.g., Acme Corp"
-          className={inputClass("clientName")}
-        />
+        {data.clientId ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50">
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-sm text-slate-800 font-medium flex-1">
+              {data.clientName}
+            </span>
+            <button
+              type="button"
+              onClick={clearClient}
+              className="text-xs text-slate-400 hover:text-slate-600"
+            >
+              Change
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              ref={inputRef}
+              type="text"
+              value={clientSearch}
+              onChange={(e) => {
+                setClientSearch(e.target.value);
+                onChange({ ...data, clientName: e.target.value, clientId: "" });
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              placeholder="Search clients or type a new name..."
+              className={inputClass("clientName")}
+            />
+            {showDropdown && (
+              <div
+                ref={dropdownRef}
+                className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-56 overflow-y-auto"
+              >
+                {clients.length > 0 ? (
+                  <>
+                    {clients.slice(0, 8).map((client: { id: string; name: string; status: string; contacts?: { name: string; isPrimary: boolean }[] }) => (
+                      <button
+                        key={client.id}
+                        type="button"
+                        onClick={() => selectClient(client)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50 last:border-0"
+                      >
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${
+                          client.status === "ACTIVE" ? "bg-green-500" :
+                          client.status === "PROSPECTIVE" ? "bg-blue-500" :
+                          "bg-slate-400"
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-slate-800 truncate">
+                            {client.name}
+                          </div>
+                          {getContactInfo(client) && (
+                            <div className="text-[10px] text-slate-400">
+                              {getContactInfo(client)}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {client.status}
+                        </span>
+                      </button>
+                    ))}
+                  </>
+                ) : clientSearch.trim() ? (
+                  <div className="px-3 py-2 text-xs text-slate-400">
+                    No clients match &quot;{clientSearch}&quot;
+                  </div>
+                ) : null}
+
+                {/* Quick-add option */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDropdown(false);
+                    setQuickAddName(clientSearch);
+                    setShowQuickAdd(true);
+                  }}
+                  className="w-full text-left px-3 py-2.5 text-xs text-[#65a30d] hover:bg-[#C8FF00]/10 font-medium border-t border-slate-100 flex items-center gap-2"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add New Client{clientSearch.trim() ? `: "${clientSearch}"` : ""}
+                </button>
+              </div>
+            )}
+          </>
+        )}
         {errors.clientName && (
           <span className="text-xs text-red-500">{errors.clientName}</span>
         )}
-        {showClientSuggestions && filteredClients.length > 0 && (
-          <div
-            ref={suggestionsRef}
-            className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto"
-          >
-            {filteredClients.map((name) => (
+
+        {/* Quick-add inline form */}
+        {showQuickAdd && (
+          <div className="rounded-lg border border-[#C8FF00] bg-[#C8FF00]/5 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700">Quick Add Client</span>
               <button
-                key={name}
                 type="button"
-                onClick={() => {
-                  update("clientName", name);
-                  setShowClientSuggestions(false);
-                }}
-                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                onClick={() => setShowQuickAdd(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
               >
-                {name}
+                Cancel
               </button>
-            ))}
+            </div>
+            <input
+              type="text"
+              value={quickAddName}
+              onChange={(e) => setQuickAddName(e.target.value)}
+              placeholder="Company name *"
+              className="w-full px-2 py-1.5 rounded border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8FF00]"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={quickAddContact}
+                onChange={(e) => setQuickAddContact(e.target.value)}
+                placeholder="Contact person"
+                className="px-2 py-1.5 rounded border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8FF00]"
+              />
+              <input
+                type="email"
+                value={quickAddEmail}
+                onChange={(e) => setQuickAddEmail(e.target.value)}
+                placeholder="Email"
+                className="px-2 py-1.5 rounded border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-[#C8FF00]"
+              />
+            </div>
+            <Button
+              size="sm"
+              onClick={handleQuickAdd}
+              loading={quickAddLoading}
+              disabled={!quickAddName.trim()}
+            >
+              Create & Select
+            </Button>
           </div>
         )}
       </div>

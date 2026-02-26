@@ -12,7 +12,7 @@ import { Step4Folders, type Step4Data } from "./Step4Folders";
 import { Step5Review } from "./Step5Review";
 import { useProjectTypes } from "@/hooks/useProjectTypes";
 import { useTaskTemplates } from "@/hooks/useTaskTemplates";
-import { useClientNames } from "@/hooks/useClientNames";
+// useClientNames kept for backward compat but Step1 now uses useClients internally
 import { createProject } from "@/hooks/useProjects";
 import type { UserWithCapacity } from "@/types";
 
@@ -30,6 +30,7 @@ interface ProjectWizardProps {
 const defaultStep1: Step1Data = {
   name: "",
   clientName: "",
+  clientId: "",
   description: "",
   projectTypeId: "",
   startDate: "",
@@ -150,7 +151,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
 
   const { projectTypes } = useProjectTypes();
   const { templates } = useTaskTemplates();
-  const { clientNames } = useClientNames();
+  // clientNames no longer needed — Step1Details uses useClients internally
   const { data: users } = useSWR<UserWithCapacity[]>("/api/users", fetcher);
 
   const resetWizard = useCallback(() => {
@@ -219,6 +220,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
       const project = await createProject({
         name: step1Data.name.trim(),
         clientName: step1Data.clientName.trim() || undefined,
+        clientId: step1Data.clientId || undefined,
         description: step1Data.description.trim() || undefined,
         projectTypeId: step1Data.projectTypeId || undefined,
         startDate: step1Data.startDate || undefined,
@@ -397,7 +399,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
               data={step1Data}
               onChange={setStep1Data}
               projectTypes={projectTypes}
-              clientNames={clientNames}
+              clientNames={[]}
               errors={errors}
             />
           )}
