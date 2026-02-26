@@ -56,6 +56,8 @@ export interface WizardInsightResponse {
     category: string;
     estimatedHours: number;
     reasoning: string;
+    suggestedStartDate?: string;
+    suggestedDeadline?: string;
   }[];
   hoursEstimate: {
     totalHours: number;

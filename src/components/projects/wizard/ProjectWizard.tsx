@@ -52,6 +52,90 @@ const defaultStep4: Step4Data = {
   basePath: "",
 };
 
+// Category ordering for timeline distribution
+const CATEGORY_ORDER: Record<string, number> = {
+  ADMIN_EARLY: 0,      // Contract/SOW type admin
+  PRE_PRODUCTION: 1,
+  PRODUCTION: 2,
+  POST_PRODUCTION: 3,
+  ADMIN_LATE: 4,        // Invoice/archival type admin
+};
+
+// Admin tasks that belong early in the timeline
+const EARLY_ADMIN_KEYWORDS = ["contract", "sow", "brief", "kickoff", "scope"];
+
+function computeTaskDates(
+  tasks: { name: string; category: string; estimatedHours?: number }[],
+  projectStart: string,
+  projectEnd: string
+): { startDate: string; deadline: string }[] {
+  const start = new Date(projectStart).getTime();
+  const end = new Date(projectEnd).getTime();
+  const totalDuration = end - start;
+
+  if (tasks.length === 0 || totalDuration <= 0) {
+    return tasks.map(() => ({ startDate: projectStart, deadline: projectEnd }));
+  }
+
+  // Assign a phase to each task
+  const tasksWithPhase = tasks.map((t) => {
+    let phase = CATEGORY_ORDER[t.category] ?? 2;
+    // Split ADMIN into early/late based on task name
+    if (t.category === "ADMIN") {
+      const nameLower = t.name.toLowerCase();
+      const isEarly = EARLY_ADMIN_KEYWORDS.some((kw) => nameLower.includes(kw));
+      phase = isEarly ? 0 : 4;
+    }
+    return { ...t, phase };
+  });
+
+  // Group by phase, then sort phases
+  const phases = new Map<number, typeof tasksWithPhase>();
+  for (const t of tasksWithPhase) {
+    if (!phases.has(t.phase)) phases.set(t.phase, []);
+    phases.get(t.phase)!.push(t);
+  }
+  const sortedPhaseKeys = Array.from(phases.keys()).sort((a, b) => a - b);
+  const phaseCount = sortedPhaseKeys.length;
+
+  // Allocate timeline proportions: each phase gets a segment
+  // with slight overlap between phases (10% overlap)
+  const results: { startDate: string; deadline: string }[] = new Array(tasks.length);
+  const overlapFraction = 0.1;
+
+  sortedPhaseKeys.forEach((phaseKey, phaseIdx) => {
+    const phaseTasks = phases.get(phaseKey)!;
+    const phaseStart = (phaseIdx / phaseCount);
+    const phaseEnd = ((phaseIdx + 1) / phaseCount);
+    // Extend slightly for overlap (except first/last)
+    const adjustedStart = phaseIdx > 0 ? phaseStart - overlapFraction / phaseCount : phaseStart;
+    const adjustedEnd = phaseIdx < phaseCount - 1 ? phaseEnd + overlapFraction / phaseCount : phaseEnd;
+
+    // Within the phase, distribute tasks sequentially
+    const taskCount = phaseTasks.length;
+    phaseTasks.forEach((task, taskIdx) => {
+      // Find original index in the input array
+      const origIdx = tasksWithPhase.indexOf(task);
+
+      const taskFractionStart = adjustedStart + (taskIdx / taskCount) * (adjustedEnd - adjustedStart);
+      const taskFractionEnd = adjustedStart + ((taskIdx + 1) / taskCount) * (adjustedEnd - adjustedStart);
+
+      const taskStartMs = start + taskFractionStart * totalDuration;
+      const taskEndMs = start + taskFractionEnd * totalDuration;
+
+      // Ensure minimum 1 day duration
+      const finalEnd = Math.max(taskEndMs, taskStartMs + 86400000);
+
+      results[origIdx] = {
+        startDate: new Date(taskStartMs).toISOString().split("T")[0],
+        deadline: new Date(Math.min(finalEnd, end)).toISOString().split("T")[0],
+      };
+    });
+  });
+
+  return results;
+}
+
 export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -62,7 +146,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
   const [loading, setLoading] = useState(false);
   const [createError, setCreateError] = useState("");
   const [acceptedMilestones, setAcceptedMilestones] = useState<{ name: string; dueDate: string }[]>([]);
-  const [acceptedAITasks, setAcceptedAITasks] = useState<string[]>([]);
+  const [acceptedAITasks, setAcceptedAITasks] = useState<{ name: string; startDate: string; deadline: string }[]>([]);
 
   const { projectTypes } = useProjectTypes();
   const { templates } = useTaskTemplates();
@@ -79,6 +163,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
     setCreateError("");
     setAcceptedMilestones([]);
     setAcceptedAITasks([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleClose = () => {
@@ -165,11 +250,28 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
         });
       }
 
-      // 3. Create tasks from selected templates
+      // 3. Create tasks from selected templates — with smart date distribution
       const selectedTemplates = templates.filter((t) =>
         step2Data.selectedTemplateIds.includes(t.id)
       );
-      for (const tmpl of selectedTemplates) {
+
+      const projStart = step1Data.startDate || new Date().toISOString().split("T")[0];
+      const projEnd = step1Data.targetFinishDate || projStart;
+
+      // Compute distributed dates for template tasks
+      const templateDates = computeTaskDates(
+        selectedTemplates.map((t) => ({
+          name: t.name,
+          category: t.category,
+          estimatedHours: t.estimatedHours ?? undefined,
+        })),
+        projStart,
+        projEnd
+      );
+
+      for (let i = 0; i < selectedTemplates.length; i++) {
+        const tmpl = selectedTemplates[i];
+        const dates = templateDates[i];
         await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -179,21 +281,40 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
             priority: tmpl.defaultPriority || "IMPORTANT_NOT_URGENT",
             ownerId: users?.[0]?.id,
             projectId: project.id,
-            startDate: step1Data.startDate
-              ? new Date(step1Data.startDate).toISOString()
-              : new Date().toISOString(),
-            deadline: step1Data.targetFinishDate
-              ? new Date(step1Data.targetFinishDate).toISOString()
-              : new Date().toISOString(),
+            startDate: new Date(dates.startDate).toISOString(),
+            deadline: new Date(dates.deadline).toISOString(),
           }),
         });
       }
 
-      // 4. Create custom tasks
+      // 4. Create custom tasks — use user-provided dates or distribute
       const validCustomTasks = step2Data.customTasks.filter(
         (t) => t.name.trim()
       );
+
+      // Custom tasks without explicit dates get distributed
+      const customTasksForDistribution = validCustomTasks
+        .filter((t) => !t.dueDate)
+        .map((t) => ({ name: t.name, category: t.category || "PRODUCTION" }));
+      const customDates = computeTaskDates(customTasksForDistribution, projStart, projEnd);
+
+      let distIdx = 0;
       for (const task of validCustomTasks) {
+        let taskStart: string;
+        let taskEnd: string;
+
+        if (task.dueDate) {
+          // User specified a date — use it, start a few days before
+          taskEnd = task.dueDate;
+          const endMs = new Date(task.dueDate).getTime();
+          const startMs = Math.max(new Date(projStart).getTime(), endMs - 3 * 86400000);
+          taskStart = new Date(startMs).toISOString().split("T")[0];
+        } else {
+          const dates = customDates[distIdx++];
+          taskStart = dates.startDate;
+          taskEnd = dates.deadline;
+        }
+
         await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -203,35 +324,25 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
             priority: task.priority || "IMPORTANT_NOT_URGENT",
             ownerId: task.assigneeId || users?.[0]?.id,
             projectId: project.id,
-            startDate: step1Data.startDate
-              ? new Date(step1Data.startDate).toISOString()
-              : new Date().toISOString(),
-            deadline: task.dueDate
-              ? new Date(task.dueDate).toISOString()
-              : step1Data.targetFinishDate
-              ? new Date(step1Data.targetFinishDate).toISOString()
-              : new Date().toISOString(),
+            startDate: new Date(taskStart).toISOString(),
+            deadline: new Date(taskEnd).toISOString(),
           }),
         });
       }
 
-      // 5. Create accepted AI-suggested tasks
-      for (const taskName of acceptedAITasks) {
+      // 5. Create accepted AI-suggested tasks — use AI-provided dates when available
+      for (const aiTask of acceptedAITasks) {
         await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: taskName,
+            title: aiTask.name,
             type: "CLIENT",
             priority: "IMPORTANT_NOT_URGENT",
             ownerId: users?.[0]?.id,
             projectId: project.id,
-            startDate: step1Data.startDate
-              ? new Date(step1Data.startDate).toISOString()
-              : new Date().toISOString(),
-            deadline: step1Data.targetFinishDate
-              ? new Date(step1Data.targetFinishDate).toISOString()
-              : new Date().toISOString(),
+            startDate: new Date(aiTask.startDate || projStart).toISOString(),
+            deadline: new Date(aiTask.deadline || projEnd).toISOString(),
           }),
         });
       }

@@ -14,7 +14,7 @@ interface Step3Props {
   templates: TaskTemplate[];
   users: UserWithCapacity[];
   onAcceptMilestones: (milestones: { name: string; dueDate: string }[]) => void;
-  onAcceptTasks: (taskNames: string[]) => void;
+  onAcceptTasks: (tasks: { name: string; startDate: string; deadline: string }[]) => void;
 }
 
 const RISK_COLORS = {
@@ -123,7 +123,11 @@ export function Step3AI({
     if (insights) {
       const accepted = insights.suggestedTasks
         .filter((_, i) => next.has(i))
-        .map((t) => t.name);
+        .map((t) => ({
+          name: t.name,
+          startDate: t.suggestedStartDate || step1Data.startDate || "",
+          deadline: t.suggestedDeadline || step1Data.targetFinishDate || "",
+        }));
       onAcceptTasks(accepted);
     }
   };
@@ -346,6 +350,11 @@ export function Step3AI({
                       <div className="text-[10px] text-slate-400">
                         {t.category.replace(/_/g, " ")} — {t.reasoning}
                       </div>
+                      {t.suggestedStartDate && t.suggestedDeadline && (
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {t.suggestedStartDate} → {t.suggestedDeadline}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))}

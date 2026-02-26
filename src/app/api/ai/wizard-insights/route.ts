@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const prompt = `Analyze this new project being set up and return a JSON object matching the schema below.
+  const prompt = `You are an expert project manager for a 3-person animation/creative studio (Replica Studio). Analyze this new project and return a JSON object.
 
 NEW PROJECT DATA:
 ${JSON.stringify({
@@ -91,7 +91,7 @@ REQUIRED JSON SCHEMA:
     ]
   },
   "suggestedTasks": [
-    { "name": "<task name>", "category": "PRE_PRODUCTION|PRODUCTION|POST_PRODUCTION|ADMIN", "estimatedHours": <number>, "reasoning": "<why this task is needed>" }
+    { "name": "<task name>", "category": "PRE_PRODUCTION|PRODUCTION|POST_PRODUCTION|ADMIN", "estimatedHours": <number>, "reasoning": "<why this task is needed>", "suggestedStartDate": "<YYYY-MM-DD>", "suggestedDeadline": "<YYYY-MM-DD>" }
   ],
   "hoursEstimate": {
     "totalHours": <number>,
@@ -103,11 +103,24 @@ REQUIRED JSON SCHEMA:
   ]
 }
 
-Provide 3-6 milestones logically distributed across the timeline.
-Suggest 3-8 additional tasks the user may have missed based on project type.
-If no historical benchmarks exist, set benchmarks.available to false with empty comparisons.
-If no team members provided, return empty teamAllocation array.
-For hours estimate, use sensible defaults per task category for a creative studio.`;
+CRITICAL RULES FOR SUGGESTED TASKS:
+- Look at the project type (${projectType || "unknown"}), client name, description, and deliverables to suggest tasks SPECIFIC to this project — not generic boilerplate.
+- For example: if the project is "Motion Graphics" for a tech client, suggest tasks like "Logo animation", "Lower thirds design", "Kinetic typography", not generic tasks.
+- If the project is "Brand Film", suggest "Interview filming", "B-roll shoot", "Voiceover recording", "Music licensing", etc.
+- If it's "Social Media Content", suggest "Platform-specific aspect ratios", "Caption/subtitle overlay", "Thumbnail design", etc.
+- DO NOT suggest tasks the user already selected (check the "selectedTasks" list). Only suggest tasks that are missing but would make sense.
+- Each suggested task MUST have suggestedStartDate and suggestedDeadline within the project timeline (${startDate} to ${targetFinishDate}).
+- Distribute suggested task dates logically: PRE_PRODUCTION tasks early, PRODUCTION in the middle, POST_PRODUCTION near the end, ADMIN spread around key milestones.
+- Suggest 3-8 additional tasks.
+
+MILESTONE RULES:
+- Provide 3-6 milestones logically distributed across the timeline.
+- Milestones should reflect real creative production checkpoints (e.g. "Concept Lock", "First Draft Delivery", "Client Review", "Final Delivery").
+
+OTHER RULES:
+- If no historical benchmarks exist, set benchmarks.available to false with empty comparisons.
+- If no team members provided, return empty teamAllocation array.
+- For hours estimate, use realistic defaults for a small creative studio (3 people, animation/motion/design focus).`;
 
   try {
     const insights = await callClaude<WizardInsightResponse>(prompt);
