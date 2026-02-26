@@ -3,18 +3,21 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useTasks } from "@/hooks/useTasks";
+import { useFilters } from "@/hooks/useFilters";
 import { Spotlight } from "@/components/dashboard/Spotlight";
 import { HeatmapGrid } from "@/components/dashboard/HeatmapGrid";
 import { ReviewBar } from "@/components/dashboard/ReviewBar";
 import { StatusBanner } from "@/components/dashboard/StatusBanner";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
+import { FilterBar } from "@/components/ui/FilterBar";
 import { Button } from "@/components/ui/Button";
 import type { TaskWithRelations } from "@/types";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
   const { tasks, isLoading } = useTasks();
+  const { filters, updateFilter, clearFilters, hasActiveFilters, activeFilterCount, applyFilters } = useFilters();
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(
     null
   );
@@ -24,8 +27,8 @@ export default function DashboardPage() {
     | string
     | undefined;
 
-  // Active tasks (not DONE), sorted by display score
-  const activeTasks = tasks
+  // Apply filters then filter active tasks, sort by score
+  const activeTasks = applyFilters(tasks)
     .filter((t) => t.status !== "DONE")
     .sort((a, b) => b.displayScore - a.displayScore);
 
@@ -56,13 +59,11 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        {/* Skeleton: Spotlight */}
         <div className="rounded-xl border-2 border-slate-100 p-6 animate-pulse">
           <div className="h-4 bg-slate-100 rounded w-24 mb-3" />
           <div className="h-6 bg-slate-100 rounded w-64 mb-4" />
           <div className="h-4 bg-slate-100 rounded w-48" />
         </div>
-        {/* Skeleton: Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
@@ -87,24 +88,28 @@ export default function DashboardPage() {
         <Button onClick={() => setCreateOpen(true)}>+ New Task</Button>
       </div>
 
+      {/* Filters */}
+      <FilterBar
+        filters={filters}
+        onFilterChange={updateFilter}
+        onClear={clearFilters}
+        hasActiveFilters={hasActiveFilters}
+        activeFilterCount={activeFilterCount}
+      />
+
       {/* Banners */}
       <StatusBanner />
 
-      {/* Main layout: content + review sidebar */}
+      {/* Main layout */}
       <div className="flex gap-6">
-        {/* Main content */}
         <div className="flex-1 min-w-0 space-y-6">
-          {/* Spotlight */}
           <Spotlight
             task={topTask}
             onClick={() => topTask && setSelectedTask(topTask)}
           />
-
-          {/* Heatmap grid */}
           <HeatmapGrid tasks={restTasks} onTaskClick={setSelectedTask} />
         </div>
 
-        {/* Review sidebar */}
         {userId && (
           <div className="hidden lg:block w-72 flex-shrink-0">
             <ReviewBar tasks={tasks} currentUserId={userId} />
@@ -112,14 +117,12 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Task detail drawer */}
       <TaskDetailDrawer
         task={selectedTask}
         open={!!selectedTask}
         onClose={() => setSelectedTask(null)}
       />
 
-      {/* Create task modal */}
       <CreateTaskModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}

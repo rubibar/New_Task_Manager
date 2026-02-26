@@ -2,18 +2,21 @@
 
 import { useState, useCallback } from "react";
 import { useTasks, updateTask } from "@/hooks/useTasks";
+import { useFilters } from "@/hooks/useFilters";
 import { GanttChart } from "@/components/timeline/GanttChart";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
+import { FilterBar } from "@/components/ui/FilterBar";
 import type { TaskWithRelations } from "@/types";
 
 export default function TimelinePage() {
   const { tasks, isLoading } = useTasks();
+  const { filters, updateFilter, clearFilters, hasActiveFilters, activeFilterCount, applyFilters } = useFilters();
   const [groupBy, setGroupBy] = useState<"project" | "owner">("project");
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(
     null
   );
 
-  const activeTasks = tasks.filter((t) => t.status !== "DONE");
+  const activeTasks = applyFilters(tasks).filter((t) => t.status !== "DONE");
 
   const handleDatesChange = useCallback(
     async (taskId: string, startDate: string, deadline: string) => {
@@ -64,10 +67,21 @@ export default function TimelinePage() {
         </div>
       </div>
 
+      {/* Filters */}
+      <FilterBar
+        filters={filters}
+        onFilterChange={updateFilter}
+        onClear={clearFilters}
+        hasActiveFilters={hasActiveFilters}
+        activeFilterCount={activeFilterCount}
+      />
+
       {activeTasks.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-slate-200 p-12 text-center">
           <p className="text-slate-400 text-sm">
-            No active tasks to display on the timeline.
+            {hasActiveFilters
+              ? "No tasks match the current filters."
+              : "No active tasks to display on the timeline."}
           </p>
         </div>
       ) : (

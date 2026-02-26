@@ -1,28 +1,22 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { useTasks, updateTask } from "@/hooks/useTasks";
+import { useFilters } from "@/hooks/useFilters";
 import { CalendarView } from "@/components/calendar/CalendarView";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
+import { FilterBar } from "@/components/ui/FilterBar";
 import { Button } from "@/components/ui/Button";
 import type { TaskWithRelations } from "@/types";
 
 export default function CalendarPage() {
-  const { data: session } = useSession();
   const { tasks, isLoading } = useTasks();
+  const { filters, updateFilter, clearFilters, hasActiveFilters, activeFilterCount, applyFilters } = useFilters();
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | "mine">("all");
 
-  const userId = (session as unknown as Record<string, unknown>)?.userId as string | undefined;
-
-  const filteredTasks = filter === "mine" && userId
-    ? tasks.filter((t) => t.ownerId === userId)
-    : tasks;
-
-  const activeTasks = filteredTasks.filter((t) => t.status !== "DONE");
+  const activeTasks = applyFilters(tasks).filter((t) => t.status !== "DONE");
 
   const handleDatesChange = useCallback(
     async (taskId: string, startDate: string, deadline: string) => {
@@ -48,34 +42,19 @@ export default function CalendarPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-800">Calendar</h1>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
-            <button
-              onClick={() => setFilter("all")}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                filter === "all"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              All Tasks
-            </button>
-            <button
-              onClick={() => setFilter("mine")}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                filter === "mine"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              My Tasks
-            </button>
-          </div>
-          <Button onClick={() => setCreateOpen(true)} size="sm">
-            + New Task
-          </Button>
-        </div>
+        <Button onClick={() => setCreateOpen(true)} size="sm">
+          + New Task
+        </Button>
       </div>
+
+      {/* Filters */}
+      <FilterBar
+        filters={filters}
+        onFilterChange={updateFilter}
+        onClear={clearFilters}
+        hasActiveFilters={hasActiveFilters}
+        activeFilterCount={activeFilterCount}
+      />
 
       <CalendarView
         tasks={activeTasks}
