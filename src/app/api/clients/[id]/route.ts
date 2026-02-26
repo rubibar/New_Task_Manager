@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recalculateClientHealthScore } from "@/lib/health-scores";
 
 export async function GET(
   request: NextRequest,
@@ -80,6 +81,9 @@ export async function PATCH(
       },
     },
   });
+
+  // Fire-and-forget health score recalculation
+  recalculateClientHealthScore(params.id).catch(console.error);
 
   return NextResponse.json(client);
 }

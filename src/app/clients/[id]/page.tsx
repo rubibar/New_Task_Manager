@@ -6,6 +6,9 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { mutate } from "swr";
 import { useClient, updateClient, deleteClient } from "@/hooks/useClients";
+import { useClientHealthScore, recalculateClientHealth } from "@/hooks/useHealthScores";
+import { HealthScoreBreakdown } from "@/components/health/HealthScoreBreakdown";
+import { HealthScoreBadge } from "@/components/health/HealthScoreBadge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -1244,6 +1247,8 @@ export default function ClientProfilePage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [healthRecalculating, setHealthRecalculating] = useState(false);
+  const { score: healthScore, isLoading: healthLoading, refresh: refreshHealth } = useClientHealthScore(clientId);
 
   const handleDelete = useCallback(async () => {
     setDeleting(true);
@@ -1290,6 +1295,7 @@ export default function ClientProfilePage() {
                 <Badge className={STATUS_COLORS[client.status] || "bg-slate-100 text-slate-600"}>
                   {humanize(client.status)}
                 </Badge>
+                <HealthScoreBadge score={healthScore} loading={healthLoading} size="md" showTrend />
               </div>
               <div className="flex items-center gap-3 text-sm text-slate-500 flex-wrap">
                 <span>{humanize(client.clientType)}</span>
@@ -1385,6 +1391,24 @@ export default function ClientProfilePage() {
               <p className="text-sm text-slate-700 whitespace-pre-wrap">{client.notes}</p>
             </div>
           )}
+        </div>
+
+        {/* Health Score Breakdown */}
+        <div className="border-t border-slate-200 px-6 py-5">
+          <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">Health Score</h3>
+          <HealthScoreBreakdown
+            score={healthScore}
+            loading={healthLoading}
+            onRecalculate={async () => {
+              setHealthRecalculating(true);
+              try {
+                await recalculateClientHealth(clientId);
+                refreshHealth();
+              } catch { /* ignore */ }
+              finally { setHealthRecalculating(false); }
+            }}
+            recalculating={healthRecalculating}
+          />
         </div>
 
         {/* Contacts section */}

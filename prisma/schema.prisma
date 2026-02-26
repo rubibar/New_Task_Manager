@@ -23,6 +23,7 @@ model User {
 
   ownedTasks           Task[]    @relation("TaskOwner")
   reviewTasks          Task[]    @relation("TaskReviewer")
+  timeEntries          TimeEntry[]
   accounts             Account[]
   sessions             Session[]
   notifications        Notification[]
@@ -79,6 +80,11 @@ model Client {
   projects       Project[]
   invoices       Invoice[]
   communications CommunicationLog[]
+
+  healthScore          Float?
+  healthScoreFactors   Json?
+  healthScoreTrend     Float     @default(0)
+  healthScoreUpdatedAt DateTime?
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -167,6 +173,11 @@ model Project {
   milestones       Milestone[]
   invoices         Invoice[]
 
+  healthScore          Float?
+  healthScoreFactors   Json?
+  healthScoreTrend     Float     @default(0)
+  healthScoreUpdatedAt DateTime?
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -199,9 +210,40 @@ model Task {
   rawScore        Float        @default(0)
   displayScore    Float        @default(0)
 
+  estimatedHours  Float?
+  timeEntries     TimeEntry[]
+
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   todoSince       DateTime?
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  taskId      String
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  startTime   DateTime
+  endTime     DateTime?
+  duration    Int?      // duration in seconds (computed on stop or from manual entry)
+
+  entryType   TimeEntryType @default(TIMER)
+  billable    Boolean   @default(true)
+  note        String?   @db.Text
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([startTime])
+}
+
+enum TimeEntryType {
+  TIMER
+  MANUAL
 }
 
 model Notification {

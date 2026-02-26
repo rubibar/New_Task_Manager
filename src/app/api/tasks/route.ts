@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
     startDate,
     deadline,
     emergency,
+    estimatedHours,
   } = body;
 
   if (!title || !ownerId || !startDate || !deadline) {
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
       startDate: new Date(startDate),
       deadline: new Date(deadline),
       emergency: emergency || false,
+      estimatedHours: estimatedHours != null ? Number(estimatedHours) : undefined,
       todoSince: new Date(),
     },
     include: {

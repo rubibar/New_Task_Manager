@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { HealthScoreBadge } from "@/components/health/HealthScoreBadge";
+import { useProjectHealthScore } from "@/hooks/useHealthScores";
 import type { ProjectWithTasks } from "@/types";
 
 interface ProjectCardProps {
@@ -14,6 +16,7 @@ export function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardP
   const totalTasks = project.tasks.length;
   const doneTasks = project.tasks.filter((t) => t.status === "DONE").length;
   const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+  const { score: healthScore, isLoading: healthLoading } = useProjectHealthScore(project.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -124,9 +127,12 @@ export function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardP
 
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-          <span>
-            {doneTasks}/{totalTasks} tasks
-          </span>
+          <div className="flex items-center gap-2">
+            <span>
+              {doneTasks}/{totalTasks} tasks
+            </span>
+            <HealthScoreBadge score={healthScore} loading={healthLoading} size="sm" showTrend />
+          </div>
           <span>{progress}%</span>
         </div>
         <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">

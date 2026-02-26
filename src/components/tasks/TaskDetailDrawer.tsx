@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Drawer } from "../ui/Drawer";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { ScoreBadge } from "./ScoreBadge";
 import { TaskEditModal } from "./TaskEditModal";
+import { TaskTimer } from "@/components/time-tracking/TaskTimer";
 import {
   getStatusColor,
   getStatusLabel,
@@ -15,6 +16,7 @@ import {
   formatDeadline,
 } from "@/lib/utils";
 import { changeTaskStatus, toggleEmergency, deleteTask } from "@/hooks/useTasks";
+import { useTimeEntries } from "@/hooks/useTimeEntries";
 import type { TaskWithRelations } from "@/types";
 
 interface TaskDetailDrawerProps {
@@ -30,6 +32,19 @@ export function TaskDetailDrawer({
 }: TaskDetailDrawerProps) {
   const [loading, setLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  // Time tracking data for the current task
+  const { entries: timeEntries } = useTimeEntries(
+    task ? { taskId: task.id } : undefined
+  );
+
+  const totalLoggedSeconds = useMemo(
+    () => timeEntries.reduce((sum, e) => sum + (e.duration ?? 0), 0),
+    [timeEntries]
+  );
+
+  const loggedHours = Math.floor(totalLoggedSeconds / 3600);
+  const loggedMinutes = Math.floor((totalLoggedSeconds % 3600) / 60);
 
   if (!task) return null;
 
@@ -93,6 +108,46 @@ export function TaskDetailDrawer({
             )}
           </div>
           <ScoreBadge score={task.displayScore} size="lg" />
+        </div>
+
+        {/* Timer */}
+        <TaskTimer taskId={task.id} taskTitle={task.title} />
+
+        {/* Time Tracking Summary */}
+        <div>
+          <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+            Time Tracking
+          </h4>
+          <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-medium text-slate-800">
+                {loggedHours > 0 ? `${loggedHours} hrs ` : ""}
+                {loggedMinutes} min logged
+              </span>
+              {task.estimatedHours != null && (
+                <span className="text-xs text-slate-500">
+                  Estimated: {task.estimatedHours} hrs
+                </span>
+              )}
+            </div>
+            {task.estimatedHours != null && task.estimatedHours > 0 && (
+              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${Math.min(
+                      (totalLoggedSeconds / (task.estimatedHours * 3600)) * 100,
+                      100
+                    )}%`,
+                    backgroundColor:
+                      totalLoggedSeconds / (task.estimatedHours * 3600) > 1
+                        ? "#ef4444"
+                        : "#C8FF00",
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Description */}

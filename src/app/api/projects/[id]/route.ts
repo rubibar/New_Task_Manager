@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recalculateProjectHealthScore } from "@/lib/health-scores";
 
 export async function PATCH(
   request: NextRequest,
@@ -35,6 +36,9 @@ export async function PATCH(
       projectType: true,
     },
   });
+
+  // Fire-and-forget health score recalculation
+  recalculateProjectHealthScore(params.id).catch(console.error);
 
   return NextResponse.json(project);
 }

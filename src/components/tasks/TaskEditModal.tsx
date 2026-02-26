@@ -65,6 +65,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
   const [startDate, setStartDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [emergency, setEmergency] = useState(false);
+  const [estimatedHours, setEstimatedHours] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -81,6 +82,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
       setStartDate(formatDateForInput(task.startDate));
       setDeadline(formatDateForInput(task.deadline));
       setEmergency(task.emergency);
+      setEstimatedHours(task.estimatedHours != null ? String(task.estimatedHours) : "");
       setError("");
     }
   }, [task, open]);
@@ -117,6 +119,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
         startDate,
         deadline,
         emergency,
+        estimatedHours: estimatedHours ? Number(estimatedHours) : null,
       });
       onClose();
     } catch {
@@ -234,6 +237,22 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
             label="Deadline *"
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
+          />
+        </div>
+
+        {/* Estimated Hours */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-slate-700">
+            Estimated Hours
+          </label>
+          <input
+            type="number"
+            value={estimatedHours}
+            onChange={(e) => setEstimatedHours(e.target.value)}
+            min="0"
+            step="0.5"
+            placeholder="e.g. 4"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#C8FF00] focus:border-transparent"
           />
         </div>
 

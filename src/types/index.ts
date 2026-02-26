@@ -26,6 +26,8 @@ import type {
   Invoice,
   InvoiceStatus,
   AIInsightCache,
+  TimeEntry,
+  TimeEntryType,
 } from "@prisma/client";
 
 export type {
@@ -56,6 +58,8 @@ export type {
   Invoice,
   InvoiceStatus,
   AIInsightCache,
+  TimeEntry,
+  TimeEntryType,
 };
 
 export type TaskWithRelations = Task & {
@@ -157,6 +161,7 @@ export interface CreateTaskInput {
   startDate: string;
   deadline: string;
   emergency?: boolean;
+  estimatedHours?: number;
 }
 
 export interface UpdateTaskInput {
@@ -170,6 +175,7 @@ export interface UpdateTaskInput {
   startDate?: string;
   deadline?: string;
   emergency?: boolean;
+  estimatedHours?: number | null;
 }
 
 export interface LineItem {
@@ -178,3 +184,52 @@ export interface LineItem {
   rate: number;
   amount: number;
 }
+
+// --- Time Tracking ---
+
+export type TimeEntryWithRelations = TimeEntry & {
+  task: Pick<Task, "id" | "title" | "projectId"> & {
+    project: Pick<Project, "id" | "name" | "color"> | null;
+  };
+  user: Pick<User, "id" | "name" | "email" | "image">;
+};
+
+export interface CreateTimeEntryInput {
+  taskId: string;
+  startTime: string;
+  endTime?: string;
+  duration?: number;
+  entryType?: TimeEntryType;
+  billable?: boolean;
+  note?: string;
+}
+
+export interface TimerState {
+  isRunning: boolean;
+  activeEntry: TimeEntry | null;
+  taskId: string | null;
+  elapsed: number;
+}
+
+// --- Health Scores ---
+
+export interface HealthScoreFactor {
+  name: string;
+  score: number;       // 0-100
+  weight: number;      // 0-1 (sums to 1)
+  weighted: number;    // score * weight
+  detail: string;
+}
+
+export interface HealthScoreResult {
+  overall: number;     // 0-100
+  factors: HealthScoreFactor[];
+  trend: number;       // delta from previous calculation
+  grade: "A" | "B" | "C" | "D" | "F";
+}
+
+export type TaskWithTimeEntries = Task & {
+  timeEntries: TimeEntry[];
+  owner: Pick<User, "id" | "name" | "email" | "image">;
+  project: Pick<Project, "id" | "name" | "color"> | null;
+};

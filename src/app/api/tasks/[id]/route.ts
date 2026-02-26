@@ -53,6 +53,7 @@ export async function PATCH(
     updateData.startDate = new Date(body.startDate);
   if (body.deadline !== undefined) updateData.deadline = new Date(body.deadline);
   if (body.emergency !== undefined) updateData.emergency = body.emergency;
+  if (body.estimatedHours !== undefined) updateData.estimatedHours = body.estimatedHours != null ? Number(body.estimatedHours) : null;
 
   const task = await prisma.task.update({
     where: { id: params.id },

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/Button";
 import { ProjectInsightPanel } from "./ProjectInsightPanel";
+import { HealthScoreBreakdown } from "@/components/health/HealthScoreBreakdown";
+import { useProjectHealthScore, recalculateProjectHealth } from "@/hooks/useHealthScores";
 import type { ProjectWithTasks } from "@/types";
 
 interface ProjectDetailDrawerProps {
@@ -39,6 +41,21 @@ export function ProjectDetailDrawer({
   onEdit,
 }: ProjectDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const { score: healthScore, isLoading: healthLoading, refresh: refreshHealth } = useProjectHealthScore(project?.id ?? null);
+  const [recalculating, setRecalculating] = useState(false);
+
+  const handleRecalculate = async () => {
+    if (!project) return;
+    setRecalculating(true);
+    try {
+      await recalculateProjectHealth(project.id);
+      refreshHealth();
+    } catch {
+      // ignore
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   if (!project) return null;
 
@@ -107,6 +124,14 @@ export function ProjectDetailDrawer({
                 {progress}% complete
               </div>
             </div>
+
+            {/* Health Score */}
+            <HealthScoreBreakdown
+              score={healthScore}
+              loading={healthLoading}
+              onRecalculate={handleRecalculate}
+              recalculating={recalculating}
+            />
 
             {/* Details grid */}
             <div className="grid grid-cols-2 gap-3">
