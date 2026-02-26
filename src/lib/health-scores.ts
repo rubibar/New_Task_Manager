@@ -664,9 +664,6 @@ export async function calculateClientHealthScore(
   // -----------------------------------------------------------------------
   // 5. Engagement Level (10%)
   // -----------------------------------------------------------------------
-  let engagementScore: number;
-  let engagementDetail: string;
-
   const activeProjectCount = activeProjects.length;
 
   // Communication frequency: count communications in last 90 days
@@ -679,35 +676,24 @@ export async function calculateClientHealthScore(
   const hasContacts = client.contacts.length > 0;
 
   // Score components
-  let projectPoints: number;
-  if (activeProjectCount >= 3) {
-    projectPoints = 40;
-  } else if (activeProjectCount >= 2) {
-    projectPoints = 35;
-  } else if (activeProjectCount >= 1) {
-    projectPoints = 25;
-  } else {
-    projectPoints = 5;
-  }
+  const projectPoints =
+    activeProjectCount >= 3 ? 40
+    : activeProjectCount >= 2 ? 35
+    : activeProjectCount >= 1 ? 25
+    : 5;
 
   // Communication frequency (per month equivalent)
   const commsPerMonth = (recentComms / 90) * 30;
-  let commPoints: number;
-  if (commsPerMonth >= 4) {
-    commPoints = 40; // Weekly+
-  } else if (commsPerMonth >= 2) {
-    commPoints = 30; // Biweekly
-  } else if (commsPerMonth >= 1) {
-    commPoints = 20; // Monthly
-  } else if (recentComms > 0) {
-    commPoints = 10;
-  } else {
-    commPoints = 0;
-  }
+  const commPoints =
+    commsPerMonth >= 4 ? 40
+    : commsPerMonth >= 2 ? 30
+    : commsPerMonth >= 1 ? 20
+    : recentComms > 0 ? 10
+    : 0;
 
   const contactPoints = hasContacts ? 20 : 0;
 
-  engagementScore = clamp(projectPoints + commPoints + contactPoints, 0, 100);
+  const engagementScore = clamp(projectPoints + commPoints + contactPoints, 0, 100);
 
   // Build detail string
   const commFrequency =
@@ -719,7 +705,7 @@ export async function calculateClientHealthScore(
           ? "monthly"
           : "infrequent";
 
-  engagementDetail = `${activeProjectCount} active project${activeProjectCount !== 1 ? "s" : ""}, ${commFrequency} communication`;
+  const engagementDetail = `${activeProjectCount} active project${activeProjectCount !== 1 ? "s" : ""}, ${commFrequency} communication`;
 
   const f5 = makeFactor(
     "Engagement Level",
