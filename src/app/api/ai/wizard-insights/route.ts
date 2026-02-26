@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { callClaude } from "@/lib/ai/client";
 import type { WizardInsightResponse } from "@/lib/ai/types";
+
+function hashInput(data: unknown): string {
+  return createHash("md5").update(JSON.stringify(data)).digest("hex");
+}
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -24,6 +29,32 @@ export async function POST(request: NextRequest) {
     startDate, targetFinishDate, budget, hourlyRate, shiftRate,
     deliverables, selectedTaskNames, teamMembers,
   } = body;
+
+  // Build input data for hashing (before DB queries for benchmarks)
+  const wizardInputData = {
+    name, clientName, description, projectType,
+    startDate, targetFinishDate, budget, hourlyRate, shiftRate,
+    deliverables, selectedTaskNames, teamMembers,
+  };
+  const inputHash = hashInput(wizardInputData);
+
+  // Check DB cache — wizard has no persistent project ID, so entityId is ""
+  const cached = await prisma.aIInsightCache.findUnique({
+    where: {
+      entityType_entityId: {
+        entityType: "wizard",
+        entityId: "",
+      },
+    },
+  });
+
+  if (cached && cached.inputHash === inputHash) {
+    return NextResponse.json({
+      ...(cached.data as object),
+      cached: true,
+      generatedAt: cached.generatedAt.toISOString(),
+    });
+  }
 
   // Fetch historical projects of same type for benchmarks
   let benchmarkData: { name: string; startDate: Date | null; targetFinishDate: Date | null; budget: number | null; _count: { tasks: number } }[] = [];
@@ -124,7 +155,35 @@ OTHER RULES:
 
   try {
     const insights = await callClaude<WizardInsightResponse>(prompt);
-    return NextResponse.json(insights);
+
+    // Upsert DB cache
+    const generatedAt = new Date();
+    await prisma.aIInsightCache.upsert({
+      where: {
+        entityType_entityId: {
+          entityType: "wizard",
+          entityId: "",
+        },
+      },
+      update: {
+        inputHash,
+        data: insights as unknown as import("@prisma/client").Prisma.JsonObject,
+        generatedAt,
+      },
+      create: {
+        entityType: "wizard",
+        entityId: "",
+        inputHash,
+        data: insights as unknown as import("@prisma/client").Prisma.JsonObject,
+        generatedAt,
+      },
+    });
+
+    return NextResponse.json({
+      ...insights,
+      cached: false,
+      generatedAt: generatedAt.toISOString(),
+    });
   } catch (error) {
     console.error("Wizard AI insight error:", error);
     return NextResponse.json(

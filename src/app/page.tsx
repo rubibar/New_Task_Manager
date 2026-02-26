@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useTasks } from "@/hooks/useTasks";
 import { useFilters } from "@/hooks/useFilters";
 import { useBatchSelection } from "@/hooks/useBatchSelection";
+import { TodaysFocus } from "@/components/dashboard/TodaysFocus";
+import { MyTasks } from "@/components/dashboard/MyTasks";
+import { ActiveProjectsSummary } from "@/components/dashboard/ActiveProjectsSummary";
+import { TeamWorkload } from "@/components/dashboard/TeamWorkload";
+import { QuickActions } from "@/components/dashboard/QuickActions";
 import { Spotlight } from "@/components/dashboard/Spotlight";
 import { HeatmapGrid } from "@/components/dashboard/HeatmapGrid";
 import { ReviewBar } from "@/components/dashboard/ReviewBar";
@@ -14,10 +20,12 @@ import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import { BatchActionBar } from "@/components/tasks/BatchActionBar";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Button } from "@/components/ui/Button";
+import { ProjectWizard } from "@/components/projects/wizard/ProjectWizard";
 import type { TaskWithRelations } from "@/types";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const { tasks, isLoading } = useTasks();
   const { filters, updateFilter, clearFilters, hasActiveFilters, activeFilterCount, applyFilters } = useFilters();
   const batch = useBatchSelection();
@@ -25,11 +33,14 @@ export default function DashboardPage() {
     null
   );
   const [createOpen, setCreateOpen] = useState(false);
+  const [projectWizardOpen, setProjectWizardOpen] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
+  const [view, setView] = useState<"overview" | "tasks">("overview");
 
   const userId = (session as unknown as Record<string, unknown>)?.userId as
     | string
     | undefined;
+  const userName = session?.user?.name || "there";
 
   // Apply filters then filter active tasks, sort by score
   const activeTasks = applyFilters(tasks)
@@ -90,6 +101,29 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-800">Dashboard</h1>
         <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setView("overview")}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                view === "overview"
+                  ? "bg-white text-slate-800 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setView("tasks")}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                view === "tasks"
+                  ? "bg-white text-slate-800 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              All Tasks
+            </button>
+          </div>
           <button
             onClick={() => {
               setBatchMode(!batchMode);
@@ -107,40 +141,91 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <FilterBar
-        filters={filters}
-        onFilterChange={updateFilter}
-        onClear={clearFilters}
-        hasActiveFilters={hasActiveFilters}
-        activeFilterCount={activeFilterCount}
-      />
-
       {/* Banners */}
       <StatusBanner />
 
-      {/* Main layout */}
-      <div className="flex gap-6">
-        <div className="flex-1 min-w-0 space-y-6">
-          <Spotlight
-            task={topTask}
-            onClick={() => topTask && setSelectedTask(topTask)}
-          />
-          <HeatmapGrid
-            tasks={restTasks}
-            onTaskClick={setSelectedTask}
-            selectable={batchMode}
-            isSelected={batch.isSelected}
-            onToggleSelect={batch.toggle}
-          />
-        </div>
+      {view === "overview" ? (
+        <>
+          {/* Overview layout: two columns */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left column: 2/3 width */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Today's Focus AI Briefing */}
+              <TodaysFocus userName={userName} tasks={activeTasks} />
 
-        {userId && (
-          <div className="hidden lg:block w-72 flex-shrink-0">
-            <ReviewBar tasks={tasks} currentUserId={userId} />
+              {/* Spotlight top task */}
+              <Spotlight
+                task={topTask}
+                onClick={() => topTask && setSelectedTask(topTask)}
+              />
+
+              {/* My Tasks */}
+              {userId && (
+                <MyTasks
+                  tasks={tasks}
+                  currentUserId={userId}
+                  onTaskClick={setSelectedTask}
+                />
+              )}
+            </div>
+
+            {/* Right column: 1/3 width */}
+            <div className="space-y-6">
+              {/* Quick Actions */}
+              <QuickActions
+                onNewTask={() => setCreateOpen(true)}
+                onNewProject={() => setProjectWizardOpen(true)}
+              />
+
+              {/* Review Bar */}
+              {userId && (
+                <ReviewBar tasks={tasks} currentUserId={userId} />
+              )}
+
+              {/* Active Projects */}
+              <ActiveProjectsSummary
+                onProjectClick={() => router.push("/projects")}
+              />
+
+              {/* Team Workload */}
+              <TeamWorkload tasks={tasks} />
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        <>
+          {/* Tasks view (original layout) */}
+          <FilterBar
+            filters={filters}
+            onFilterChange={updateFilter}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            activeFilterCount={activeFilterCount}
+          />
+
+          <div className="flex gap-6">
+            <div className="flex-1 min-w-0 space-y-6">
+              <Spotlight
+                task={topTask}
+                onClick={() => topTask && setSelectedTask(topTask)}
+              />
+              <HeatmapGrid
+                tasks={restTasks}
+                onTaskClick={setSelectedTask}
+                selectable={batchMode}
+                isSelected={batch.isSelected}
+                onToggleSelect={batch.toggle}
+              />
+            </div>
+
+            {userId && (
+              <div className="hidden lg:block w-72 flex-shrink-0">
+                <ReviewBar tasks={tasks} currentUserId={userId} />
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <TaskDetailDrawer
         task={selectedTask}
@@ -151,6 +236,11 @@ export default function DashboardPage() {
       <CreateTaskModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+      />
+
+      <ProjectWizard
+        open={projectWizardOpen}
+        onClose={() => setProjectWizardOpen(false)}
       />
 
       {/* Batch Action Bar */}

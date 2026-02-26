@@ -6,6 +6,7 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { MobileNav } from "./MobileNav";
 import { AIAssistant } from "@/components/ai/AIAssistant";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 
 const publicPaths = ["/login", "/unauthorized"];
 
@@ -33,6 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <MobileNav />
       <AIAssistant />
+      <GlobalSearch />
     </div>
   );
 }
