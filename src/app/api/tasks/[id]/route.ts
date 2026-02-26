@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateCalendarEvent, deleteCalendarEvent } from "@/lib/calendar";
+import { recalculateAndPersistScores } from "@/lib/scoring";
 
 export async function GET(
   request: NextRequest,
@@ -70,6 +71,9 @@ export async function PATCH(
   });
   await updateCalendarEvent(task, currentUser?.id);
 
+  // Recalculate all scores after edit
+  recalculateAndPersistScores();
+
   return NextResponse.json(task);
 }
 
@@ -101,6 +105,9 @@ export async function DELETE(
   }
 
   await prisma.task.delete({ where: { id: params.id } });
+
+  // Recalculate remaining task scores after deletion
+  recalculateAndPersistScores();
 
   return NextResponse.json({ success: true });
 }

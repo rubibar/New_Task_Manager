@@ -6,6 +6,7 @@ import {
   isSundayRDTime,
   isThursdayMeetingMode,
 } from "./business-hours";
+import { prisma } from "@/lib/prisma";
 import type { ScoreBreakdown } from "@/types";
 
 // Base weights by task type
@@ -137,12 +138,59 @@ export function calculateAllScores(
       };
     });
 
-  // Find max raw score for normalization
+  // --- Curved normalization (sqrt) ---
+  // Linear normalization crushes lower scores when one task is extremely high.
+  // Sqrt-based normalization spreads scores more evenly across 0-100.
+  // Example: with maxRaw=275, a task at rawScore=70 gets:
+  //   Linear:  70/275*100 = 25   (too compressed)
+  //   Sqrt:    sqrt(70/275)*100 = 50  (much better spread)
+
   const maxRaw = Math.max(...scored.map((s) => s.rawScore), 1);
 
-  // Normalize: DisplayScore = (RS_task / RS_max) * 100
-  return scored.map((s) => ({
-    ...s,
-    displayScore: Math.round((s.rawScore / maxRaw) * 100),
-  }));
+  return scored.map((s) => {
+    if (s.rawScore <= 0) return { ...s, displayScore: 0 };
+
+    const ratio = s.rawScore / maxRaw;
+    // Power 0.55 (close to sqrt) gives a good spread while preserving ranking
+    const curved = Math.pow(ratio, 0.55);
+    // Floor of 5 — no active task should show as 0
+    const display = Math.max(5, Math.round(curved * 100));
+
+    return { ...s, displayScore: display };
+  });
+}
+
+/**
+ * Recalculate scores for ALL active tasks and persist to DB.
+ * Call this after any task mutation (create, update, status change, delete).
+ * Runs in the background — does not block the response.
+ */
+export async function recalculateAndPersistScores(): Promise<void> {
+  try {
+    const tasks = await prisma.task.findMany({
+      where: { status: { not: "DONE" } },
+    });
+
+    const users = await prisma.user.findMany({
+      select: { id: true, atCapacity: true },
+    });
+    const capacityMap = new Map(users.map((u) => [u.id, u.atCapacity]));
+
+    const scores = calculateAllScores(tasks, capacityMap);
+
+    // Batch update all scores
+    await Promise.all(
+      scores.map((s) =>
+        prisma.task.update({
+          where: { id: s.taskId },
+          data: {
+            rawScore: s.rawScore,
+            displayScore: s.displayScore,
+          },
+        })
+      )
+    );
+  } catch (error) {
+    console.error("Score recalculation failed:", error);
+  }
 }

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { calculateAllScores } from "@/lib/scoring";
+import { recalculateAndPersistScores } from "@/lib/scoring";
 
 export async function POST(request: NextRequest) {
   // Verify cron secret
@@ -13,36 +12,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Get all active tasks
-    const tasks = await prisma.task.findMany({
-      where: { status: { not: "DONE" } },
-    });
-
-    // Get user capacity map
-    const users = await prisma.user.findMany({
-      select: { id: true, atCapacity: true },
-    });
-    const capacityMap = new Map(users.map((u) => [u.id, u.atCapacity]));
-
-    // Calculate all scores
-    const scores = calculateAllScores(tasks, capacityMap);
-
-    // Batch update all scores
-    await Promise.all(
-      scores.map((s) =>
-        prisma.task.update({
-          where: { id: s.taskId },
-          data: {
-            rawScore: s.rawScore,
-            displayScore: s.displayScore,
-          },
-        })
-      )
-    );
+    await recalculateAndPersistScores();
 
     return NextResponse.json({
       success: true,
-      tasksUpdated: scores.length,
     });
   } catch (error) {
     console.error("Score recalculation failed:", error);

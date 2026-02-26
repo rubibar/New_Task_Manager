@@ -10,6 +10,9 @@ interface KanbanBoardProps {
   tasks: TaskWithRelations[];
   onTaskClick: (task: TaskWithRelations) => void;
   onStatusChange: (taskId: string, newStatus: string) => void;
+  selectable?: boolean;
+  isSelected?: (id: string) => boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 const COLUMNS = [
@@ -21,7 +24,7 @@ const COLUMNS = [
 
 const WIP_LIMIT = 5;
 
-export function KanbanBoard({ tasks, onTaskClick, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, onTaskClick, onStatusChange, selectable, isSelected, onToggleSelect }: KanbanBoardProps) {
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
   const getColumnTasks = useCallback(
@@ -71,9 +74,9 @@ export function KanbanBoard({ tasks, onTaskClick, onStatusChange }: KanbanBoardP
         return (
           <div
             key={column.status}
-            onDragOver={(e) => handleDragOver(e, column.status)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, column.status)}
+            onDragOver={!selectable ? (e) => handleDragOver(e, column.status) : undefined}
+            onDragLeave={!selectable ? handleDragLeave : undefined}
+            onDrop={!selectable ? (e) => handleDrop(e, column.status) : undefined}
             className={`
               flex flex-col rounded-xl border transition-all duration-150
               ${column.bg}
@@ -123,6 +126,9 @@ export function KanbanBoard({ tasks, onTaskClick, onStatusChange }: KanbanBoardP
                     key={task.id}
                     task={task}
                     onClick={() => onTaskClick(task)}
+                    selectable={selectable}
+                    selected={isSelected?.(task.id)}
+                    onToggleSelect={onToggleSelect}
                   />
                 ))}
               </AnimatePresence>

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyReviewRequest } from "@/lib/notifications";
 import { updateCalendarEvent } from "@/lib/calendar";
+import { recalculateAndPersistScores } from "@/lib/scoring";
 
 export async function POST(
   request: NextRequest,
@@ -81,6 +82,9 @@ export async function POST(
 
   // Sync calendar
   await updateCalendarEvent(updatedTask);
+
+  // Recalculate all scores after status change
+  recalculateAndPersistScores();
 
   return NextResponse.json(updatedTask);
 }

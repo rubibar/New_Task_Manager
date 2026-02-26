@@ -10,9 +10,12 @@ import type { TaskWithRelations } from "@/types";
 interface KanbanCardProps {
   task: TaskWithRelations;
   onClick: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function KanbanCard({ task, onClick }: KanbanCardProps) {
+export function KanbanCard({ task, onClick, selectable, selected, onToggleSelect }: KanbanCardProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragStart = useCallback(
@@ -33,9 +36,9 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
 
   return (
     <div
-      draggable="true"
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+      draggable={!selectable ? "true" : undefined}
+      onDragStart={!selectable ? handleDragStart : undefined}
+      onDragEnd={!selectable ? handleDragEnd : undefined}
     >
       <motion.div
         layout
@@ -45,15 +48,40 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         onClick={onClick}
         className={`
-          bg-white rounded-lg border border-slate-200 p-3 cursor-grab
+          relative bg-white rounded-lg border border-slate-200 p-3
           shadow-sm hover:shadow-md transition-shadow duration-150
-          active:cursor-grabbing select-none
+          select-none
+          ${!selectable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
           ${task.emergency ? "ring-2 ring-red-500" : ""}
+          ${selected ? "ring-2 ring-[#C8FF00]" : ""}
           ${isDragging ? "opacity-50" : ""}
         `}
       >
+        {/* Batch select checkbox */}
+        {selectable && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.(task.id);
+            }}
+            className={`absolute top-2 right-2 w-4.5 h-4.5 rounded border-2 flex items-center justify-center z-10 transition-colors ${
+              selected
+                ? "bg-[#C8FF00] border-[#C8FF00]"
+                : "border-slate-300 bg-white hover:border-slate-400"
+            }`}
+            style={{ width: 18, height: 18 }}
+          >
+            {selected && (
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1e293b" strokeWidth="3">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            )}
+          </button>
+        )}
+
         {/* Title */}
-        <h4 className="text-sm font-medium text-slate-800 truncate">{task.title}</h4>
+        <h4 className="text-sm font-medium text-slate-800 truncate pr-5">{task.title}</h4>
 
         {/* Project badge */}
         {task.project && (

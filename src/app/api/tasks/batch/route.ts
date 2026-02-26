@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recalculateAndPersistScores } from "@/lib/scoring";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -68,6 +69,9 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
+
+    // Recalculate all scores after batch mutation
+    recalculateAndPersistScores();
 
     return NextResponse.json({ success: true, affected: taskIds.length });
   } catch (error) {

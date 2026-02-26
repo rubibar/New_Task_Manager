@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createCalendarEvent } from "@/lib/calendar";
 import { notifyTaskAssigned } from "@/lib/notifications";
-import { calculateRawScore } from "@/lib/scoring";
+import { recalculateAndPersistScores } from "@/lib/scoring";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -85,18 +85,8 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Calculate initial score
-  const ownerCapacity =
-    (await prisma.user.findUnique({
-      where: { id: ownerId },
-      select: { atCapacity: true },
-    }))?.atCapacity ?? false;
-
-  const breakdown = calculateRawScore(task, ownerCapacity);
-  await prisma.task.update({
-    where: { id: task.id },
-    data: { rawScore: breakdown.rawScore },
-  });
+  // Recalculate all scores (including this new task) — runs async, doesn't block
+  recalculateAndPersistScores();
 
   // Find current user for calendar auth + notifications
   const currentUser = await prisma.user.findUnique({
