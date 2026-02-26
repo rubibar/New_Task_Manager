@@ -103,21 +103,27 @@ export function useTimeSummary(params: TimeSummaryParams) {
 
 /**
  * Get the currently active timer.
+ * The API returns the raw TimeEntry object (or null if no timer running).
  * No polling — elapsed time is calculated client-side via setInterval.
  * Revalidates on window focus so the UI catches external stop/start events.
  */
 export function useActiveTimer() {
-  const { data, error, isLoading } = useSWR<{
-    activeEntry: TimeEntry | null;
-    isRunning: boolean;
-  }>(TIMER_KEY, fetcher, {
-    refreshInterval: 0,
-    revalidateOnFocus: true,
-  });
+  const { data, error, isLoading } = useSWR<TimeEntry | null>(
+    TIMER_KEY,
+    fetcher,
+    {
+      refreshInterval: 0,
+      revalidateOnFocus: true,
+    }
+  );
+
+  // API returns the entry directly (or null) — not wrapped in { activeEntry, isRunning }
+  const activeEntry = data ?? null;
+  const isRunning = activeEntry != null && activeEntry.endTime == null;
 
   return {
-    activeEntry: data?.activeEntry ?? null,
-    isRunning: data?.isRunning ?? false,
+    activeEntry,
+    isRunning,
     isLoading,
     isError: !!error,
   };
