@@ -61,6 +61,8 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [acceptedMilestones, setAcceptedMilestones] = useState<{ name: string; dueDate: string }[]>([]);
+  const [acceptedAITasks, setAcceptedAITasks] = useState<string[]>([]);
 
   const { projectTypes } = useProjectTypes();
   const { templates } = useTaskTemplates();
@@ -75,6 +77,8 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
     setStep4Data(defaultStep4);
     setErrors({});
     setCreateError("");
+    setAcceptedMilestones([]);
+    setAcceptedAITasks([]);
   }, []);
 
   const handleClose = () => {
@@ -211,6 +215,40 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
         });
       }
 
+      // 5. Create accepted AI-suggested tasks
+      for (const taskName of acceptedAITasks) {
+        await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: taskName,
+            type: "CLIENT",
+            priority: "IMPORTANT_NOT_URGENT",
+            ownerId: users?.[0]?.id,
+            projectId: project.id,
+            startDate: step1Data.startDate
+              ? new Date(step1Data.startDate).toISOString()
+              : new Date().toISOString(),
+            deadline: step1Data.targetFinishDate
+              ? new Date(step1Data.targetFinishDate).toISOString()
+              : new Date().toISOString(),
+          }),
+        });
+      }
+
+      // 6. Create accepted milestones
+      for (const ms of acceptedMilestones) {
+        await fetch("/api/milestones", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: project.id,
+            name: ms.name,
+            dueDate: ms.dueDate,
+          }),
+        });
+      }
+
       handleClose();
     } catch {
       setCreateError("Failed to create project. Please try again.");
@@ -261,7 +299,15 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
             />
           )}
           {currentStep === 3 && (
-            <Step3AI step1Data={step1Data} step2Data={step2Data} />
+            <Step3AI
+              step1Data={step1Data}
+              step2Data={step2Data}
+              projectTypes={projectTypes}
+              templates={templates}
+              users={users || []}
+              onAcceptMilestones={setAcceptedMilestones}
+              onAcceptTasks={setAcceptedAITasks}
+            />
           )}
           {currentStep === 4 && (
             <Step4Folders

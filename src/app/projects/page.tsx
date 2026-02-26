@@ -5,22 +5,34 @@ import { useProjects } from "@/hooks/useProjects";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { ProjectModal } from "@/components/projects/ProjectModal";
 import { ProjectWizard } from "@/components/projects/wizard/ProjectWizard";
+import { ProjectDetailDrawer } from "@/components/projects/ProjectDetailDrawer";
 import { Button } from "@/components/ui/Button";
-import type { Project } from "@/types";
+import type { Project, ProjectWithTasks } from "@/types";
 
 export default function ProjectsPage() {
   const { projects, isLoading } = useProjects();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
+  const [detailProject, setDetailProject] = useState<ProjectWithTasks | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
-  const handleEdit = (project: Project) => {
-    setEditProject(project);
-    setEditModalOpen(true);
+  const handleCardClick = (project: ProjectWithTasks) => {
+    setDetailProject(project);
+    setDetailOpen(true);
   };
 
-  const handleCreate = () => {
-    setWizardOpen(true);
+  const handleEditFromDrawer = () => {
+    if (detailProject) {
+      setEditProject(detailProject);
+      setDetailOpen(false);
+      setEditModalOpen(true);
+    }
+  };
+
+  const handleCloseDetail = () => {
+    setDetailOpen(false);
+    setDetailProject(null);
   };
 
   const handleCloseEdit = () => {
@@ -52,7 +64,7 @@ export default function ProjectsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-slate-800">Projects</h1>
-        <Button onClick={handleCreate}>+ New Project</Button>
+        <Button onClick={() => setWizardOpen(true)}>+ New Project</Button>
       </div>
 
       {projects.length === 0 ? (
@@ -60,7 +72,7 @@ export default function ProjectsPage() {
           <p className="text-slate-400 text-sm mb-3">
             No projects yet. Create one to organize your tasks.
           </p>
-          <Button onClick={handleCreate} size="sm">
+          <Button onClick={() => setWizardOpen(true)} size="sm">
             Create Project
           </Button>
         </div>
@@ -70,7 +82,7 @@ export default function ProjectsPage() {
             <ProjectCard
               key={project.id}
               project={project}
-              onClick={() => handleEdit(project)}
+              onClick={() => handleCardClick(project)}
             />
           ))}
         </div>
@@ -79,6 +91,13 @@ export default function ProjectsPage() {
       <ProjectWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
+      />
+
+      <ProjectDetailDrawer
+        open={detailOpen}
+        onClose={handleCloseDetail}
+        project={detailProject}
+        onEdit={handleEditFromDrawer}
       />
 
       <ProjectModal
