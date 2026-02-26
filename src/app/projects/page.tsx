@@ -4,26 +4,27 @@ import { useState } from "react";
 import { useProjects } from "@/hooks/useProjects";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { ProjectModal } from "@/components/projects/ProjectModal";
+import { ProjectWizard } from "@/components/projects/wizard/ProjectWizard";
 import { Button } from "@/components/ui/Button";
 import type { Project } from "@/types";
 
 export default function ProjectsPage() {
   const { projects, isLoading } = useProjects();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
 
   const handleEdit = (project: Project) => {
     setEditProject(project);
-    setModalOpen(true);
+    setEditModalOpen(true);
   };
 
   const handleCreate = () => {
-    setEditProject(null);
-    setModalOpen(true);
+    setWizardOpen(true);
   };
 
-  const handleClose = () => {
-    setModalOpen(false);
+  const handleCloseEdit = () => {
+    setEditModalOpen(false);
     setEditProject(null);
   };
 
@@ -75,9 +76,14 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      <ProjectWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+      />
+
       <ProjectModal
-        open={modalOpen}
-        onClose={handleClose}
+        open={editModalOpen}
+        onClose={handleCloseEdit}
         project={editProject}
       />
     </div>
