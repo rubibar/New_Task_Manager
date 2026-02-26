@@ -8,6 +8,14 @@ import type {
   TaskStatus,
   ProjectStatus,
   NotificationType,
+  Deliverable,
+  DeliverableStatus,
+  DeliverableStatusLog,
+  ProjectType,
+  TaskTemplate,
+  TaskTemplateCategory,
+  FolderTemplate,
+  Milestone,
 } from "@prisma/client";
 
 export type {
@@ -20,6 +28,14 @@ export type {
   TaskStatus,
   ProjectStatus,
   NotificationType,
+  Deliverable,
+  DeliverableStatus,
+  DeliverableStatusLog,
+  ProjectType,
+  TaskTemplate,
+  TaskTemplateCategory,
+  FolderTemplate,
+  Milestone,
 };
 
 export type TaskWithRelations = Task & {
@@ -30,8 +46,46 @@ export type TaskWithRelations = Task & {
 
 export type ProjectWithTasks = Project & {
   tasks: Task[];
+  deliverables?: Deliverable[];
+  milestones?: Milestone[];
+  projectType?: ProjectType | null;
   _count?: { tasks: number };
 };
+
+export type DeliverableWithRelations = Deliverable & {
+  assignee: Pick<User, "id" | "name" | "email" | "image"> | null;
+  statusLogs?: (DeliverableStatusLog & {
+    changedBy: Pick<User, "id" | "name">;
+  })[];
+};
+
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+  color?: string;
+  clientName?: string;
+  projectTypeId?: string;
+  startDate?: string;
+  targetFinishDate?: string;
+  budget?: number;
+  shiftRate?: number;
+  hourlyRate?: number;
+  status?: ProjectStatus;
+}
+
+export interface CreateDeliverableInput {
+  projectId: string;
+  name: string;
+  description?: string;
+  dueDate: string;
+  assigneeId?: string;
+}
+
+export interface CreateMilestoneInput {
+  projectId: string;
+  name: string;
+  dueDate: string;
+}
 
 export type UserWithCapacity = Pick<
   User,

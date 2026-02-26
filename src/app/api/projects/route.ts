@@ -15,6 +15,9 @@ export async function GET() {
       tasks: {
         select: { status: true },
       },
+      projectType: true,
+      deliverables: true,
+      milestones: true,
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -29,7 +32,19 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, description, color } = body;
+  const {
+    name,
+    description,
+    color,
+    clientName,
+    projectTypeId,
+    startDate,
+    targetFinishDate,
+    budget,
+    shiftRate,
+    hourlyRate,
+    status,
+  } = body;
 
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -40,6 +55,17 @@ export async function POST(request: NextRequest) {
       name,
       description,
       color: color || "#C8FF00",
+      clientName: clientName || undefined,
+      projectTypeId: projectTypeId || undefined,
+      startDate: startDate ? new Date(startDate) : undefined,
+      targetFinishDate: targetFinishDate ? new Date(targetFinishDate) : undefined,
+      budget: budget != null ? Number(budget) : undefined,
+      shiftRate: shiftRate != null ? Number(shiftRate) : undefined,
+      hourlyRate: hourlyRate != null ? Number(hourlyRate) : undefined,
+      status: status || undefined,
+    },
+    include: {
+      projectType: true,
     },
   });
 

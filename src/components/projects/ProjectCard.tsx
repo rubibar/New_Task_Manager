@@ -36,14 +36,18 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
         </div>
         <span
           className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-            project.status === "ACTIVE"
+            project.status === "IN_PROGRESS" || project.status === "ACTIVE"
               ? "bg-green-100 text-green-700"
               : project.status === "COMPLETED"
               ? "bg-blue-100 text-blue-700"
+              : project.status === "ON_HOLD"
+              ? "bg-yellow-100 text-yellow-700"
+              : project.status === "NOT_STARTED"
+              ? "bg-slate-100 text-slate-600"
               : "bg-slate-100 text-slate-500"
           }`}
         >
-          {project.status}
+          {project.status.replace(/_/g, " ")}
         </span>
       </div>
 

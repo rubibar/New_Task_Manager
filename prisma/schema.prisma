@@ -18,11 +18,13 @@ model User {
   tokenExpiry   DateTime?
   atCapacity    Boolean   @default(false)
 
-  ownedTasks    Task[]    @relation("TaskOwner")
-  reviewTasks   Task[]    @relation("TaskReviewer")
-  accounts      Account[]
-  sessions      Session[]
-  notifications Notification[]
+  ownedTasks           Task[]    @relation("TaskOwner")
+  reviewTasks          Task[]    @relation("TaskReviewer")
+  accounts             Account[]
+  sessions             Session[]
+  notifications        Notification[]
+  deliverables         Deliverable[]
+  deliverableStatusLogs DeliverableStatusLog[]
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -56,15 +58,25 @@ model Session {
 }
 
 model Project {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  color       String        @default("#C8FF00")
-  status      ProjectStatus @default(ACTIVE)
-  tasks       Task[]
+  id               String        @id @default(cuid())
+  name             String
+  description      String?       @db.Text
+  color            String        @default("#C8FF00")
+  status           ProjectStatus @default(NOT_STARTED)
+  clientName       String?
+  projectTypeId    String?
+  projectType      ProjectType?  @relation(fields: [projectTypeId], references: [id])
+  startDate        DateTime?
+  targetFinishDate DateTime?
+  budget           Float?
+  shiftRate        Float?
+  hourlyRate       Float?
+  tasks            Task[]
+  deliverables     Deliverable[]
+  milestones       Milestone[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Task {
@@ -134,8 +146,89 @@ enum TaskStatus {
 
 enum ProjectStatus {
   ACTIVE
+  NOT_STARTED
+  IN_PROGRESS
+  ON_HOLD
   COMPLETED
   ARCHIVED
+}
+
+enum DeliverableStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  IN_REVIEW
+  APPROVED
+  DELIVERED
+}
+
+enum TaskTemplateCategory {
+  PRE_PRODUCTION
+  PRODUCTION
+  POST_PRODUCTION
+  ADMIN
+}
+
+model ProjectType {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  projects        Project[]
+  folderTemplates FolderTemplate[]
+  createdAt       DateTime         @default(now())
+}
+
+model Deliverable {
+  id          String             @id @default(cuid())
+  projectId   String
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?            @db.Text
+  dueDate     DateTime
+  status      DeliverableStatus  @default(NOT_STARTED)
+  assigneeId  String?
+  assignee    User?              @relation(fields: [assigneeId], references: [id])
+  statusLogs  DeliverableStatusLog[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DeliverableStatusLog {
+  id            String            @id @default(cuid())
+  deliverableId String
+  deliverable   Deliverable       @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  oldStatus     DeliverableStatus
+  newStatus     DeliverableStatus
+  changedById   String
+  changedBy     User              @relation(fields: [changedById], references: [id])
+  createdAt     DateTime          @default(now())
+}
+
+model TaskTemplate {
+  id             String               @id @default(cuid())
+  name           String
+  category       TaskTemplateCategory
+  defaultPriority String?
+  estimatedHours Float?
+  createdAt      DateTime             @default(now())
+}
+
+model FolderTemplate {
+  id            String      @id @default(cuid())
+  projectTypeId String
+  projectType   ProjectType @relation(fields: [projectTypeId], references: [id], onDelete: Cascade)
+  structure     Json
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Milestone {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  dueDate   DateTime
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 enum NotificationType {

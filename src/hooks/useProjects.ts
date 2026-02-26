@@ -1,5 +1,5 @@
 import useSWR, { mutate } from "swr";
-import type { ProjectWithTasks } from "@/types";
+import type { ProjectWithTasks, CreateProjectInput } from "@/types";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -20,11 +20,7 @@ export function useProjects() {
   };
 }
 
-export async function createProject(input: {
-  name: string;
-  description?: string;
-  color?: string;
-}) {
+export async function createProject(input: CreateProjectInput) {
   const res = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -39,7 +35,7 @@ export async function createProject(input: {
 
 export async function updateProject(
   id: string,
-  input: { name?: string; description?: string; color?: string; status?: string }
+  input: Partial<CreateProjectInput>
 ) {
   const res = await fetch(`/api/projects/${id}`, {
     method: "PATCH",

@@ -19,10 +19,20 @@ export async function PATCH(
   if (body.description !== undefined) updateData.description = body.description;
   if (body.color !== undefined) updateData.color = body.color;
   if (body.status !== undefined) updateData.status = body.status;
+  if (body.clientName !== undefined) updateData.clientName = body.clientName;
+  if (body.projectTypeId !== undefined) updateData.projectTypeId = body.projectTypeId || null;
+  if (body.startDate !== undefined) updateData.startDate = body.startDate ? new Date(body.startDate) : null;
+  if (body.targetFinishDate !== undefined) updateData.targetFinishDate = body.targetFinishDate ? new Date(body.targetFinishDate) : null;
+  if (body.budget !== undefined) updateData.budget = body.budget != null ? Number(body.budget) : null;
+  if (body.shiftRate !== undefined) updateData.shiftRate = body.shiftRate != null ? Number(body.shiftRate) : null;
+  if (body.hourlyRate !== undefined) updateData.hourlyRate = body.hourlyRate != null ? Number(body.hourlyRate) : null;
 
   const project = await prisma.project.update({
     where: { id: params.id },
     data: updateData,
+    include: {
+      projectType: true,
+    },
   });
 
   return NextResponse.json(project);

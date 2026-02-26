@@ -225,6 +225,134 @@ async function main() {
   }
 
   console.log(`Created ${tasks.length} tasks`);
+
+  // Seed project types
+  const projectTypes = [
+    "Branding",
+    "Motion Graphics",
+    "3D/VFX",
+    "Web Development",
+    "AI/ML Pipeline",
+    "Video Production",
+    "Print",
+    "Other",
+  ];
+
+  for (const name of projectTypes) {
+    await prisma.projectType.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
+
+  console.log(`Created ${projectTypes.length} project types`);
+
+  // Seed task templates
+  const taskTemplates = [
+    // Pre-Production
+    { name: "Client brief review", category: "PRE_PRODUCTION" as const, estimatedHours: 2 },
+    { name: "Mood board creation", category: "PRE_PRODUCTION" as const, estimatedHours: 4 },
+    { name: "Reference gathering", category: "PRE_PRODUCTION" as const, estimatedHours: 3 },
+    { name: "Concept development", category: "PRE_PRODUCTION" as const, estimatedHours: 8 },
+    { name: "Storyboarding", category: "PRE_PRODUCTION" as const, estimatedHours: 6 },
+    { name: "Asset audit", category: "PRE_PRODUCTION" as const, estimatedHours: 2 },
+    // Production
+    { name: "3D modeling", category: "PRODUCTION" as const, estimatedHours: 16 },
+    { name: "Texturing/shading", category: "PRODUCTION" as const, estimatedHours: 12 },
+    { name: "Animation", category: "PRODUCTION" as const, estimatedHours: 20 },
+    { name: "Compositing", category: "PRODUCTION" as const, estimatedHours: 10 },
+    { name: "Editing", category: "PRODUCTION" as const, estimatedHours: 8 },
+    { name: "Color grading", category: "PRODUCTION" as const, estimatedHours: 4 },
+    { name: "Sound design", category: "PRODUCTION" as const, estimatedHours: 6 },
+    { name: "AI model training/deployment", category: "PRODUCTION" as const, estimatedHours: 16 },
+    { name: "Web development", category: "PRODUCTION" as const, estimatedHours: 20 },
+    { name: "Print layout", category: "PRODUCTION" as const, estimatedHours: 8 },
+    // Post-Production
+    { name: "Internal review", category: "POST_PRODUCTION" as const, estimatedHours: 2 },
+    { name: "Client review rounds", category: "POST_PRODUCTION" as const, estimatedHours: 4 },
+    { name: "Revisions", category: "POST_PRODUCTION" as const, estimatedHours: 8 },
+    { name: "Final render/export", category: "POST_PRODUCTION" as const, estimatedHours: 3 },
+    { name: "File packaging", category: "POST_PRODUCTION" as const, estimatedHours: 2 },
+    // Admin
+    { name: "Contract/SOW", category: "ADMIN" as const, estimatedHours: 3 },
+    { name: "Invoice creation", category: "ADMIN" as const, estimatedHours: 1 },
+    { name: "Asset delivery", category: "ADMIN" as const, estimatedHours: 2 },
+    { name: "Project archival", category: "ADMIN" as const, estimatedHours: 2 },
+    { name: "Backup", category: "ADMIN" as const, estimatedHours: 1 },
+  ];
+
+  for (const tmpl of taskTemplates) {
+    const existing = await prisma.taskTemplate.findFirst({
+      where: { name: tmpl.name, category: tmpl.category },
+    });
+    if (!existing) {
+      await prisma.taskTemplate.create({ data: tmpl });
+    }
+  }
+
+  console.log(`Seeded ${taskTemplates.length} task templates`);
+
+  // Seed default folder templates for Motion Graphics
+  const motionGraphicsType = await prisma.projectType.findUnique({
+    where: { name: "Motion Graphics" },
+  });
+
+  if (motionGraphicsType) {
+    const existingFolderTemplate = await prisma.folderTemplate.findFirst({
+      where: { projectTypeId: motionGraphicsType.id },
+    });
+
+    if (!existingFolderTemplate) {
+      await prisma.folderTemplate.create({
+        data: {
+          projectTypeId: motionGraphicsType.id,
+          structure: {
+            name: "ProjectName_ClientName",
+            children: [
+              {
+                name: "00_Admin",
+                children: [
+                  { name: "Brief" },
+                  { name: "Contracts" },
+                  { name: "Invoices" },
+                ],
+              },
+              { name: "01_References" },
+              {
+                name: "02_Assets",
+                children: [
+                  { name: "Fonts" },
+                  { name: "Images" },
+                  { name: "Video" },
+                  { name: "Audio" },
+                  { name: "3D" },
+                ],
+              },
+              {
+                name: "03_Working_Files",
+                children: [
+                  { name: "AE" },
+                  { name: "C4D" },
+                  { name: "Houdini" },
+                  { name: "Comps" },
+                ],
+              },
+              {
+                name: "04_Renders",
+                children: [{ name: "WIP" }, { name: "Final" }],
+              },
+              { name: "05_Deliverables" },
+              { name: "06_Archive" },
+            ],
+          },
+        },
+      });
+
+      console.log("Created folder template for Motion Graphics");
+    }
+  }
+
   console.log("Seed complete!");
 }
 
