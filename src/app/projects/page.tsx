@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useProjects } from "@/hooks/useProjects";
+import { useProjects, deleteProject } from "@/hooks/useProjects";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { ProjectModal } from "@/components/projects/ProjectModal";
 import { ProjectWizard } from "@/components/projects/wizard/ProjectWizard";
 import { ProjectDetailDrawer } from "@/components/projects/ProjectDetailDrawer";
+import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import type { Project, ProjectWithTasks } from "@/types";
 
@@ -16,10 +17,18 @@ export default function ProjectsPage() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [detailProject, setDetailProject] = useState<ProjectWithTasks | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectWithTasks | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const handleCardClick = (project: ProjectWithTasks) => {
     setDetailProject(project);
     setDetailOpen(true);
+  };
+
+  const handleEdit = (project: ProjectWithTasks) => {
+    setEditProject(project);
+    setEditModalOpen(true);
   };
 
   const handleEditFromDrawer = () => {
@@ -27,6 +36,22 @@ export default function ProjectsPage() {
       setEditProject(detailProject);
       setDetailOpen(false);
       setEditModalOpen(true);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteProject(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete project"
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -83,6 +108,11 @@ export default function ProjectsPage() {
               key={project.id}
               project={project}
               onClick={() => handleCardClick(project)}
+              onEdit={() => handleEdit(project)}
+              onDelete={() => {
+                setDeleteError("");
+                setDeleteTarget(project);
+              }}
             />
           ))}
         </div>
@@ -105,6 +135,52 @@ export default function ProjectsPage() {
         onClose={handleCloseEdit}
         project={editProject}
       />
+
+      {/* Delete Confirmation */}
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Project"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Are you sure you want to delete{" "}
+            <span className="font-semibold text-slate-800">
+              {deleteTarget?.name}
+            </span>
+            ? This action cannot be undone.
+          </p>
+          {deleteTarget && deleteTarget.tasks.filter((t) => t.status !== "DONE").length > 0 && (
+            <div className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded-lg">
+              This project has{" "}
+              {deleteTarget.tasks.filter((t) => t.status !== "DONE").length}{" "}
+              active task(s). You must complete or remove them before deleting.
+            </div>
+          )}
+          {deleteError && (
+            <div className="text-xs bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg">
+              {deleteError}
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={deleting}
+              onClick={handleDelete}
+            >
+              Delete Project
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
