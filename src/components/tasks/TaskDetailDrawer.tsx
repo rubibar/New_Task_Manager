@@ -17,7 +17,7 @@ import {
   getCategoryLabel,
   formatDeadline,
 } from "@/lib/utils";
-import { changeTaskStatus, toggleEmergency, deleteTask } from "@/hooks/useTasks";
+import { changeTaskStatus, toggleEmergency, deleteTask, updateTask } from "@/hooks/useTasks";
 import { useTimeEntries } from "@/hooks/useTimeEntries";
 import type { TaskWithRelations } from "@/types";
 
@@ -54,6 +54,17 @@ export function TaskDetailDrawer({
     setLoading(true);
     try {
       await changeTaskStatus(task.id, status);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLockToggle = async () => {
+    setLoading(true);
+    try {
+      await updateTask(task.id, {
+        manualOverride: !(task as TaskWithRelations & { manualOverride?: boolean }).manualOverride,
+      });
     } finally {
       setLoading(false);
     }
@@ -106,6 +117,11 @@ export function TaskDetailDrawer({
                 style={{ color: task.project.color }}
               >
                 {task.project.name}
+              </span>
+            )}
+            {task.deliverable && (
+              <span className="text-[10px] font-medium mt-0.5 inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 ml-1">
+                {task.deliverable.name}
               </span>
             )}
           </div>
@@ -166,6 +182,64 @@ export function TaskDetailDrawer({
 
         {/* Checklist */}
         <TaskChecklist taskId={task.id} />
+
+        {/* Dependencies */}
+        {((task.dependencies && task.dependencies.length > 0) ||
+          (task.dependents && task.dependents.length > 0)) && (
+          <div>
+            <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+              Dependencies
+            </h4>
+            <div className="space-y-2">
+              {task.dependencies && task.dependencies.length > 0 && (
+                <div>
+                  <span className="text-[10px] uppercase text-slate-400 font-medium">
+                    Depends on
+                  </span>
+                  <div className="space-y-1 mt-1">
+                    {task.dependencies.map((dep) => (
+                      <div
+                        key={dep.id}
+                        className="flex items-center gap-2 text-xs bg-slate-50 rounded px-2.5 py-1.5"
+                      >
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${getStatusColor(dep.dependsOn.status)}`}
+                        />
+                        <span className="text-slate-700">{dep.dependsOn.title}</span>
+                        <span className="text-slate-400 ml-auto text-[10px]">
+                          {getStatusLabel(dep.dependsOn.status)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {task.dependents && task.dependents.length > 0 && (
+                <div>
+                  <span className="text-[10px] uppercase text-slate-400 font-medium">
+                    Blocks
+                  </span>
+                  <div className="space-y-1 mt-1">
+                    {task.dependents.map((dep) => (
+                      <div
+                        key={dep.id}
+                        className="flex items-center gap-2 text-xs bg-slate-50 rounded px-2.5 py-1.5"
+                      >
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${getStatusColor(dep.task.status)}`}
+                        />
+                        <span className="text-slate-700">{dep.task.title}</span>
+                        <span className="text-slate-400 ml-auto text-[10px]">
+                          {getStatusLabel(dep.task.status)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Meta grid */}
         <div className="grid grid-cols-2 gap-4">
@@ -325,6 +399,18 @@ export function TaskDetailDrawer({
               </Button>
             </div>
           )}
+
+          {/* Lock/unlock dates */}
+          <Button
+            variant="ghost"
+            onClick={handleLockToggle}
+            loading={loading}
+            className="w-full"
+          >
+            {(task as TaskWithRelations & { manualOverride?: boolean }).manualOverride
+              ? "Unlock Dates (Auto-cascade)"
+              : "Lock Dates"}
+          </Button>
 
           {/* Emergency toggle */}
           <Button

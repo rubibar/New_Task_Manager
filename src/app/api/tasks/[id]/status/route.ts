@@ -83,6 +83,30 @@ export async function POST(
   // Sync calendar
   await updateCalendarEvent(updatedTask);
 
+  // Auto-update deliverable status based on sibling task statuses
+  if (updatedTask.deliverableId) {
+    const siblingTasks = await prisma.task.findMany({
+      where: { deliverableId: updatedTask.deliverableId },
+      select: { status: true },
+    });
+    const allDone = siblingTasks.every((t) => t.status === "DONE");
+    const anyStarted = siblingTasks.some(
+      (t) => t.status === "IN_PROGRESS" || t.status === "IN_REVIEW" || t.status === "DONE"
+    );
+
+    if (allDone) {
+      await prisma.deliverable.update({
+        where: { id: updatedTask.deliverableId },
+        data: { status: "APPROVED" },
+      });
+    } else if (anyStarted) {
+      await prisma.deliverable.update({
+        where: { id: updatedTask.deliverableId },
+        data: { status: "IN_PROGRESS" },
+      });
+    }
+  }
+
   // Recalculate all scores after status change
   recalculateAndPersistScores();
 

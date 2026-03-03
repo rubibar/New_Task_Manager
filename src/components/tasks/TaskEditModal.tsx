@@ -7,6 +7,7 @@ import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { DatePicker } from "../ui/DatePicker";
 import { updateTask } from "@/hooks/useTasks";
+import { useDeliverables } from "@/hooks/useDeliverables";
 import type { TaskWithRelations, TaskType, Priority, TaskTemplateCategory } from "@/types";
 
 const fetcher = (url: string) =>
@@ -70,13 +71,17 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
   const [ownerId, setOwnerId] = useState("");
   const [reviewerId, setReviewerId] = useState("");
   const [projectId, setProjectId] = useState("");
+  const [deliverableId, setDeliverableId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [emergency, setEmergency] = useState(false);
+  const [manualOverride, setManualOverride] = useState(false);
   const [estimatedHours, setEstimatedHours] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const { deliverables } = useDeliverables(projectId || null);
 
   // Pre-fill form whenever the task changes or modal opens
   useEffect(() => {
@@ -88,9 +93,11 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
       setOwnerId(task.ownerId);
       setReviewerId(task.reviewerId || "");
       setProjectId(task.projectId || "");
+      setDeliverableId(task.deliverableId || "");
       setStartDate(formatDateForInput(task.startDate));
       setDeadline(formatDateForInput(task.deadline));
       setEmergency(task.emergency);
+      setManualOverride((task as TaskWithRelations & { manualOverride?: boolean }).manualOverride ?? false);
       setEstimatedHours(task.estimatedHours != null ? String(task.estimatedHours) : "");
       setCategory(task.category || "");
       setError("");
@@ -121,9 +128,11 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
         ownerId,
         reviewerId: reviewerId || undefined,
         projectId: projectId || null,
+        deliverableId: deliverableId || null,
         startDate: startDate || null,
         deadline: deadline || null,
         emergency,
+        manualOverride,
         estimatedHours: estimatedHours ? Number(estimatedHours) : null,
         category: (category as TaskTemplateCategory) || null,
       });
@@ -146,6 +155,11 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
       value: p.id,
       label: p.name,
     })),
+  ];
+
+  const deliverableOptions = [
+    { value: "", label: "No deliverable" },
+    ...deliverables.map((d) => ({ value: d.id, label: d.name })),
   ];
 
   const reviewerOptions = [
@@ -230,7 +244,10 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
             label="Project"
             options={projectOptions}
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            onChange={(e) => {
+              setProjectId(e.target.value);
+              if (!e.target.value) setDeliverableId("");
+            }}
           />
           <Select
             label="Phase"
@@ -239,6 +256,16 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
             onChange={(e) => setCategory(e.target.value)}
           />
         </div>
+
+        {/* Deliverable (only when project is selected) */}
+        {projectId && deliverables.length > 0 && (
+          <Select
+            label="Deliverable"
+            options={deliverableOptions}
+            value={deliverableId}
+            onChange={(e) => setDeliverableId(e.target.value)}
+          />
+        )}
 
         {/* Dates row */}
         <div className="grid grid-cols-2 gap-4">
@@ -280,6 +307,19 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
           />
           <span className="text-sm text-red-600 font-medium">
             Emergency Task
+          </span>
+        </label>
+
+        {/* Lock dates toggle */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={manualOverride}
+            onChange={(e) => setManualOverride(e.target.checked)}
+            className="w-4 h-4 rounded border-slate-300 text-slate-600 focus:ring-slate-500"
+          />
+          <span className="text-sm text-slate-600 font-medium">
+            Lock dates (skip auto-cascade)
           </span>
         </label>
 

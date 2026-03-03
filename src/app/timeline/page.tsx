@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useTasks, updateTask } from "@/hooks/useTasks";
 import { useFilters } from "@/hooks/useFilters";
+import { useMilestones } from "@/hooks/useMilestones";
 import { GanttChart } from "@/components/timeline/GanttChart";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { FilterBar } from "@/components/ui/FilterBar";
@@ -10,6 +11,7 @@ import type { TaskWithRelations } from "@/types";
 
 export default function TimelinePage() {
   const { tasks, isLoading } = useTasks();
+  const { milestones } = useMilestones();
   const { filters, updateFilter, clearFilters, hasActiveFilters, activeFilterCount, applyFilters } = useFilters();
   const [groupBy, setGroupBy] = useState<"project" | "owner">("project");
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(
@@ -90,6 +92,7 @@ export default function TimelinePage() {
           groupBy={groupBy}
           onTaskClick={setSelectedTask}
           onTaskDatesChange={handleDatesChange}
+          milestones={milestones}
         />
       )}
 

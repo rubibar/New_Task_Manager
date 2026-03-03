@@ -14,8 +14,15 @@ import {
   subWeeks,
 } from "date-fns";
 import type { TaskWithRelations } from "@/types";
+import type { Milestone } from "@prisma/client";
 import { getTaskColor } from "@/lib/utils";
 import { ScoreBadge } from "@/components/tasks/ScoreBadge";
+import {
+  DependencyArrows,
+  type BarPosition,
+  type DependencyLink,
+} from "./DependencyArrows";
+import { MilestoneMarkers } from "./MilestoneMarkers";
 
 interface GanttChartProps {
   tasks: TaskWithRelations[];
@@ -26,11 +33,13 @@ interface GanttChartProps {
     startDate: string,
     deadline: string
   ) => void;
+  milestones?: Milestone[];
 }
 
 const DAY_WIDTH = 40;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 56;
+const GROUP_HEADER_HEIGHT = 30;
 
 type DragMode = "move" | "resize-start" | "resize-end";
 
@@ -48,6 +57,7 @@ export function GanttChart({
   groupBy,
   onTaskClick,
   onTaskDatesChange,
+  milestones,
 }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewWeeks, setViewWeeks] = useState(4);
@@ -55,6 +65,9 @@ export function GanttChart({
   const dragRef = useRef<DragState | null>(null);
   const [unscheduledOpen, setUnscheduledOpen] = useState(true);
   const [dropTargetDay, setDropTargetDay] = useState<string | null>(null);
+  const [affectedTaskIds, setAffectedTaskIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Split tasks into scheduled (have both dates) and unscheduled
   const scheduledTasks = useMemo(
@@ -114,6 +127,67 @@ export function GanttChart({
     return Array.from(map.values());
   }, [scheduledTasks, groupBy]);
 
+  // Compute bar positions for dependency arrows
+  const barPositions = useMemo(() => {
+    const positions: BarPosition[] = [];
+    let yOffset = HEADER_HEIGHT;
+
+    for (const group of groups) {
+      yOffset += GROUP_HEADER_HEIGHT; // group header
+      for (const task of group.tasks) {
+        const start = new Date(task.startDate!);
+        const end = new Date(task.deadline!);
+        const startOffset = differenceInDays(start, viewStart);
+        const duration = Math.max(1, differenceInDays(end, start));
+        const left = startOffset * DAY_WIDTH;
+        const width = duration * DAY_WIDTH;
+
+        positions.push({
+          taskId: task.id,
+          left,
+          width: Math.max(width, DAY_WIDTH),
+          top: yOffset + 4, // top-1 padding
+          height: ROW_HEIGHT - 8,
+        });
+        yOffset += ROW_HEIGHT;
+      }
+    }
+
+    return positions;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, viewStart.getTime()]);
+
+  // Total chart height for SVG overlay
+  const totalChartHeight = useMemo(() => {
+    let h = HEADER_HEIGHT;
+    for (const group of groups) {
+      h += GROUP_HEADER_HEIGHT + group.tasks.length * ROW_HEIGHT;
+    }
+    return h;
+  }, [groups]);
+
+  // Build dependency links from task data
+  const dependencyLinks = useMemo(() => {
+    const links: DependencyLink[] = [];
+    const scheduledIds = new Set(scheduledTasks.map((t) => t.id));
+
+    for (const task of scheduledTasks) {
+      const deps = (task as TaskWithRelations & { dependencies?: { dependsOnId: string }[] }).dependencies;
+      if (deps) {
+        for (const dep of deps) {
+          if (scheduledIds.has(dep.dependsOnId)) {
+            links.push({
+              fromTaskId: dep.dependsOnId,
+              toTaskId: task.id,
+            });
+          }
+        }
+      }
+    }
+
+    return links;
+  }, [scheduledTasks]);
+
   const getBarPosition = useCallback(
     (start: Date, end: Date) => {
       const startOffset = differenceInDays(start, viewStart);
@@ -157,6 +231,9 @@ export function GanttChart({
       e.preventDefault();
       e.stopPropagation();
 
+      // Block drag on locked tasks
+      if ((task as TaskWithRelations & { manualOverride?: boolean }).manualOverride) return;
+
       const state: DragState = {
         taskId: task.id,
         mode,
@@ -168,6 +245,16 @@ export function GanttChart({
 
       dragRef.current = state;
       setDrag(state);
+
+      // Fetch cascade preview
+      fetch(`/api/tasks/${task.id}/cascade-preview`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.affectedTaskIds?.length > 0) {
+            setAffectedTaskIds(new Set(data.affectedTaskIds));
+          }
+        })
+        .catch(() => {});
     },
     []
   );
@@ -215,6 +302,7 @@ export function GanttChart({
 
     dragRef.current = null;
     setDrag(null);
+    setAffectedTaskIds(new Set());
   }, [onTaskDatesChange]);
 
   // Global mouse handlers for drag
@@ -334,7 +422,10 @@ export function GanttChart({
           {groups.map((group) => (
             <div key={group.label}>
               {/* Group header */}
-              <div className="flex items-center px-3 py-1.5 bg-slate-50 border-b border-slate-200">
+              <div
+                className="flex items-center px-3 bg-slate-50 border-b border-slate-200"
+                style={{ height: GROUP_HEADER_HEIGHT }}
+              >
                 <span className="text-xs font-semibold text-slate-600">
                   {group.label}
                 </span>
@@ -355,6 +446,8 @@ export function GanttChart({
                 const pos = getBarPosition(taskStart, taskEnd);
                 const isDragging =
                   drag?.taskId === task.id;
+                const isLocked = (task as TaskWithRelations & { manualOverride?: boolean }).manualOverride;
+                const isAffected = affectedTaskIds.has(task.id) && drag;
 
                 return (
                   <div
@@ -388,6 +481,8 @@ export function GanttChart({
                         transition-shadow select-none
                         ${task.emergency ? "ring-1 ring-red-500" : ""}
                         ${isDragging ? "shadow-lg opacity-90 z-30" : "hover:shadow-md z-10"}
+                        ${isAffected ? "ring-2 ring-amber-400 ring-offset-1" : ""}
+                        ${isLocked ? "opacity-80" : ""}
                       `}
                       style={{
                         left: pos.left,
@@ -396,10 +491,10 @@ export function GanttChart({
                         backgroundColor: getTaskColor(task.project?.color ?? null, task.category ?? null),
                         borderColor: getTaskColor(task.project?.color ?? null, task.category ?? null),
                       }}
-                      title={`${task.title} (${format(taskStart, "MMM d")} - ${format(taskEnd, "MMM d")})`}
+                      title={`${task.title} (${format(taskStart, "MMM d")} - ${format(taskEnd, "MMM d")})${isLocked ? " [Locked]" : ""}`}
                     >
                       {/* Left resize handle */}
-                      {onTaskDatesChange && (
+                      {onTaskDatesChange && !isLocked && (
                         <div
                           className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-black/10 rounded-l z-20"
                           onMouseDown={(e) =>
@@ -410,13 +505,13 @@ export function GanttChart({
 
                       {/* Main bar body — draggable to move */}
                       <div
-                        className={`flex-1 px-2 truncate ${
-                          onTaskDatesChange
+                        className={`flex-1 px-2 truncate flex items-center gap-1 ${
+                          onTaskDatesChange && !isLocked
                             ? "cursor-grab active:cursor-grabbing"
                             : "cursor-pointer"
                         }`}
                         onMouseDown={(e) => {
-                          if (onTaskDatesChange) {
+                          if (onTaskDatesChange && !isLocked) {
                             handleMouseDown(e, task, "move");
                           }
                         }}
@@ -427,13 +522,28 @@ export function GanttChart({
                           }
                         }}
                       >
+                        {/* Lock icon */}
+                        {isLocked && (
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            className="text-slate-500 flex-shrink-0"
+                          >
+                            <rect x="3" y="11" width="18" height="11" rx="2" />
+                            <path d="M7 11V7a5 5 0 0110 0v4" />
+                          </svg>
+                        )}
                         <span className="text-[10px] font-medium text-slate-700 truncate">
                           {task.title}
                         </span>
                       </div>
 
                       {/* Right resize handle */}
-                      {onTaskDatesChange && (
+                      {onTaskDatesChange && !isLocked && (
                         <div
                           className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-black/10 rounded-r z-20"
                           onMouseDown={(e) =>
@@ -453,6 +563,11 @@ export function GanttChart({
                       >
                         {format(dragged.start, "MMM d")} -{" "}
                         {format(dragged.end, "MMM d")}
+                        {affectedTaskIds.size > 0 && (
+                          <span className="text-amber-300 ml-1">
+                            ({affectedTaskIds.size} will shift)
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -470,6 +585,28 @@ export function GanttChart({
               height: "100%",
             }}
           />
+
+          {/* Dependency arrows overlay */}
+          {dependencyLinks.length > 0 && (
+            <DependencyArrows
+              bars={barPositions}
+              links={dependencyLinks}
+              highlightedTaskIds={drag ? affectedTaskIds : undefined}
+              svgWidth={totalWidth}
+              svgHeight={totalChartHeight}
+            />
+          )}
+
+          {/* Milestone markers */}
+          {milestones && milestones.length > 0 && (
+            <MilestoneMarkers
+              milestones={milestones}
+              viewStart={viewStart}
+              dayWidth={DAY_WIDTH}
+              chartHeight={totalChartHeight}
+              totalWidth={totalWidth}
+            />
+          )}
         </div>
       </div>
 

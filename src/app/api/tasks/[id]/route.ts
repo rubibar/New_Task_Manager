@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateCalendarEvent, deleteCalendarEvent } from "@/lib/calendar";
 import { recalculateAndPersistScores } from "@/lib/scoring";
+import { cascadeDateShift, autoSequenceDeliverableTasks } from "@/lib/dependencies";
 
 export async function GET(
   request: NextRequest,
@@ -21,6 +22,13 @@ export async function GET(
       reviewer: { select: { id: true, name: true, email: true, image: true } },
       project: { select: { id: true, name: true, color: true } },
       checklistItems: { orderBy: { sortOrder: "asc" } },
+      deliverable: { select: { id: true, name: true } },
+      dependencies: {
+        include: { dependsOn: { select: { id: true, title: true, status: true } } },
+      },
+      dependents: {
+        include: { task: { select: { id: true, title: true, status: true } } },
+      },
     },
   });
 
@@ -55,8 +63,16 @@ export async function PATCH(
   if (body.deadline !== undefined)
     updateData.deadline = body.deadline ? new Date(body.deadline) : null;
   if (body.emergency !== undefined) updateData.emergency = body.emergency;
+  if (body.manualOverride !== undefined) updateData.manualOverride = body.manualOverride;
   if (body.estimatedHours !== undefined) updateData.estimatedHours = body.estimatedHours != null ? Number(body.estimatedHours) : null;
   if (body.category !== undefined) updateData.category = body.category;
+  if (body.deliverableId !== undefined) updateData.deliverableId = body.deliverableId || null;
+
+  // Capture old deliverableId before update for re-sequencing
+  const oldTask = await prisma.task.findUnique({
+    where: { id: params.id },
+    select: { deliverableId: true, deadline: true },
+  });
 
   const task = await prisma.task.update({
     where: { id: params.id },
@@ -66,8 +82,30 @@ export async function PATCH(
       reviewer: { select: { id: true, name: true, email: true, image: true } },
       project: { select: { id: true, name: true, color: true } },
       checklistItems: { orderBy: { sortOrder: "asc" } },
+      deliverable: { select: { id: true, name: true } },
+      dependencies: {
+        include: { dependsOn: { select: { id: true, title: true, status: true } } },
+      },
+      dependents: {
+        include: { task: { select: { id: true, title: true, status: true } } },
+      },
     },
   });
+
+  // Cascade date shift if deadline changed
+  if (body.deadline !== undefined && oldTask?.deadline?.toISOString() !== task.deadline?.toISOString()) {
+    cascadeDateShift(params.id).catch(() => {});
+  }
+
+  // Re-sequence deliverables if deliverableId changed
+  if (body.deliverableId !== undefined) {
+    if (oldTask?.deliverableId && oldTask.deliverableId !== task.deliverableId) {
+      autoSequenceDeliverableTasks(oldTask.deliverableId).catch(() => {});
+    }
+    if (task.deliverableId) {
+      autoSequenceDeliverableTasks(task.deliverableId).catch(() => {});
+    }
+  }
 
   // Sync to calendar (use current user's token)
   const currentUser = await prisma.user.findUnique({

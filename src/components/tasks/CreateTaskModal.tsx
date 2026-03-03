@@ -8,6 +8,7 @@ import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { DatePicker } from "../ui/DatePicker";
 import { createTask } from "@/hooks/useTasks";
+import { useDeliverables } from "@/hooks/useDeliverables";
 import type { TaskType, Priority, TaskTemplateCategory } from "@/types";
 
 const fetcher = (url: string) =>
@@ -56,12 +57,15 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
   const [ownerId, setOwnerId] = useState(userId || "");
   const [reviewerId, setReviewerId] = useState("");
   const [projectId, setProjectId] = useState("");
+  const [deliverableId, setDeliverableId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [category, setCategory] = useState("");
   const [emergency, setEmergency] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const { deliverables } = useDeliverables(projectId || null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +86,7 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
         ownerId,
         reviewerId: reviewerId || undefined,
         projectId: projectId || undefined,
+        deliverableId: deliverableId || undefined,
         startDate: startDate || undefined,
         deadline: deadline || undefined,
         emergency,
@@ -94,6 +99,7 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
       setPriority("IMPORTANT_NOT_URGENT");
       setReviewerId("");
       setProjectId("");
+      setDeliverableId("");
       setStartDate("");
       setDeadline("");
       setCategory("");
@@ -117,6 +123,11 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
       value: p.id,
       label: p.name,
     })),
+  ];
+
+  const deliverableOptions = [
+    { value: "", label: "No deliverable" },
+    ...deliverables.map((d) => ({ value: d.id, label: d.name })),
   ];
 
   const reviewerOptions = [
@@ -199,7 +210,10 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
             label="Project"
             options={projectOptions}
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            onChange={(e) => {
+              setProjectId(e.target.value);
+              if (!e.target.value) setDeliverableId("");
+            }}
           />
           <Select
             label="Phase"
@@ -208,6 +222,16 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
             onChange={(e) => setCategory(e.target.value)}
           />
         </div>
+
+        {/* Deliverable (only when project is selected) */}
+        {projectId && deliverables.length > 0 && (
+          <Select
+            label="Deliverable"
+            options={deliverableOptions}
+            value={deliverableId}
+            onChange={(e) => setDeliverableId(e.target.value)}
+          />
+        )}
 
         {/* Dates row */}
         <div className="grid grid-cols-2 gap-4">

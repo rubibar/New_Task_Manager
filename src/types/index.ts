@@ -30,6 +30,7 @@ import type {
   TimeEntryType,
   ChecklistItem,
   TemplateChecklistItem,
+  TaskDependency,
 } from "@prisma/client";
 
 export type {
@@ -64,6 +65,7 @@ export type {
   TimeEntryType,
   ChecklistItem,
   TemplateChecklistItem,
+  TaskDependency,
 };
 
 export type TaskWithRelations = Task & {
@@ -71,6 +73,9 @@ export type TaskWithRelations = Task & {
   reviewer: Pick<User, "id" | "name" | "email" | "image"> | null;
   project: Pick<Project, "id" | "name" | "color"> | null;
   checklistItems?: Pick<ChecklistItem, "id" | "completed">[];
+  deliverable?: Pick<Deliverable, "id" | "name"> | null;
+  dependencies?: (TaskDependency & { dependsOn: Pick<Task, "id" | "title" | "status"> })[];
+  dependents?: (TaskDependency & { task: Pick<Task, "id" | "title" | "status"> })[];
 };
 
 export type TaskTemplateWithChecklist = TaskTemplate & {
@@ -91,6 +96,7 @@ export type DeliverableWithRelations = Deliverable & {
   statusLogs?: (DeliverableStatusLog & {
     changedBy: Pick<User, "id" | "name">;
   })[];
+  tasks?: Pick<Task, "id" | "title" | "status" | "category">[];
 };
 
 export type ClientWithRelations = Client & {
@@ -166,6 +172,7 @@ export interface CreateTaskInput {
   ownerId: string;
   reviewerId?: string;
   projectId?: string;
+  deliverableId?: string;
   startDate?: string;
   deadline?: string;
   emergency?: boolean;
@@ -181,11 +188,13 @@ export interface UpdateTaskInput {
   ownerId?: string;
   reviewerId?: string;
   projectId?: string | null;
+  deliverableId?: string | null;
   startDate?: string | null;
   deadline?: string | null;
   emergency?: boolean;
   estimatedHours?: number | null;
   category?: TaskTemplateCategory | null;
+  manualOverride?: boolean;
 }
 
 export interface LineItem {

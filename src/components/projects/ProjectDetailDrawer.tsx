@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { ProjectInsightPanel } from "./ProjectInsightPanel";
 import { HealthScoreBreakdown } from "@/components/health/HealthScoreBreakdown";
 import { useProjectHealthScore, recalculateProjectHealth } from "@/hooks/useHealthScores";
+import { useDeliverables, resequenceDeliverable } from "@/hooks/useDeliverables";
 import type { ProjectWithTasks } from "@/types";
 
 interface ProjectDetailDrawerProps {
@@ -42,6 +43,7 @@ export function ProjectDetailDrawer({
 }: ProjectDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const { score: healthScore, isLoading: healthLoading, refresh: refreshHealth } = useProjectHealthScore(project?.id ?? null);
+  const { deliverables } = useDeliverables(project?.id ?? null);
   const [recalculating, setRecalculating] = useState(false);
 
   const handleRecalculate = async () => {
@@ -65,7 +67,7 @@ export function ProjectDetailDrawer({
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
-    { key: "deliverables", label: `Deliverables (${project.deliverables?.length || 0})` },
+    { key: "deliverables", label: `Deliverables (${deliverables.length})` },
     { key: "insights", label: "AI Insights" },
   ];
 
@@ -239,45 +241,76 @@ export function ProjectDetailDrawer({
         {/* Deliverables Tab */}
         {activeTab === "deliverables" && (
           <div className="space-y-3">
-            {!project.deliverables || project.deliverables.length === 0 ? (
+            {deliverables.length === 0 ? (
               <div className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center">
                 <p className="text-xs text-slate-400">
                   No deliverables for this project
                 </p>
               </div>
             ) : (
-              project.deliverables.map((del) => (
-                <div
-                  key={del.id}
-                  className="rounded-lg border border-slate-200 p-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-800">
-                        {del.name}
-                      </h4>
-                      {del.description && (
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {del.description}
-                        </p>
+              deliverables.map((del) => {
+                const tasks = del.tasks || [];
+                const tasksDone = tasks.filter((t) => t.status === "DONE").length;
+                const taskProgress = tasks.length > 0 ? Math.round((tasksDone / tasks.length) * 100) : 0;
+
+                return (
+                  <div
+                    key={del.id}
+                    className="rounded-lg border border-slate-200 p-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="text-sm font-medium text-slate-800">
+                          {del.name}
+                        </h4>
+                        {del.description && (
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {del.description}
+                          </p>
+                        )}
+                      </div>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          DELIVERABLE_STATUS_COLORS[del.status] ||
+                          "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {del.status.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
+                      <span>
+                        Due: {new Date(del.dueDate).toLocaleDateString()}
+                      </span>
+                      {tasks.length > 0 && (
+                        <span>{tasksDone}/{tasks.length} tasks done</span>
                       )}
                     </div>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        DELIVERABLE_STATUS_COLORS[del.status] ||
-                        "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {del.status.replace(/_/g, " ")}
-                    </span>
+                    {tasks.length > 0 && (
+                      <div className="mt-2">
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${taskProgress}%`,
+                              backgroundColor: taskProgress === 100 ? "#22c55e" : project.color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {tasks.length >= 2 && (
+                      <button
+                        type="button"
+                        onClick={() => resequenceDeliverable(del.id).catch(() => {})}
+                        className="mt-2 text-[10px] text-[#65a30d] hover:text-[#4d7c0f] font-medium"
+                      >
+                        Re-sequence tasks
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
-                    <span>
-                      Due: {new Date(del.dueDate).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

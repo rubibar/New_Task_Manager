@@ -22,6 +22,10 @@ export async function GET(request: NextRequest) {
         include: { changedBy: { select: { id: true, name: true } } },
         orderBy: { createdAt: "desc" },
       },
+      tasks: {
+        select: { id: true, title: true, status: true, category: true },
+        orderBy: { createdAt: "asc" },
+      },
     },
     orderBy: { dueDate: "asc" },
   });
