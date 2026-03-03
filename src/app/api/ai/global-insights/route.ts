@@ -51,7 +51,7 @@ export async function POST() {
     budget: p.budget,
     taskCount: p.tasks.length,
     tasksDone: p.tasks.filter((t) => t.status === "DONE").length,
-    tasksOverdue: p.tasks.filter((t) => t.deadline < new Date() && t.status !== "DONE").length,
+    tasksOverdue: p.tasks.filter((t) => t.deadline && t.deadline < new Date() && t.status !== "DONE").length,
     deliverableCount: p.deliverables.length,
     deliverablesComplete: p.deliverables.filter((d) =>
       d.status === "DELIVERED" || d.status === "APPROVED"
@@ -65,7 +65,7 @@ export async function POST() {
     return {
       name: u.name,
       activeTasks: assignedTasks.length,
-      overdueTasks: assignedTasks.filter((t) => t.deadline < new Date()).length,
+      overdueTasks: assignedTasks.filter((t) => t.deadline && t.deadline < new Date()).length,
     };
   });
 

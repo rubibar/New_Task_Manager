@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
       owner: { select: { id: true, name: true, email: true, image: true } },
       reviewer: { select: { id: true, name: true, email: true, image: true } },
       project: { select: { id: true, name: true, color: true } },
+      checklistItems: { select: { id: true, completed: true } },
     },
     orderBy: { displayScore: "desc" },
   });
@@ -56,11 +57,13 @@ export async function POST(request: NextRequest) {
     deadline,
     emergency,
     estimatedHours,
+    category,
+    checklistItems: checklistItemsInput,
   } = body;
 
-  if (!title || !ownerId || !startDate || !deadline) {
+  if (!title || !ownerId) {
     return NextResponse.json(
-      { error: "Missing required fields: title, ownerId, startDate, deadline" },
+      { error: "Missing required fields: title, ownerId" },
       { status: 400 }
     );
   }
@@ -74,16 +77,28 @@ export async function POST(request: NextRequest) {
       ownerId,
       reviewerId: reviewerId || null,
       projectId: projectId || null,
-      startDate: new Date(startDate),
-      deadline: new Date(deadline),
+      startDate: startDate ? new Date(startDate) : null,
+      deadline: deadline ? new Date(deadline) : null,
       emergency: emergency || false,
       estimatedHours: estimatedHours != null ? Number(estimatedHours) : undefined,
+      category: category || undefined,
       todoSince: new Date(),
+      checklistItems: checklistItemsInput?.length
+        ? {
+            create: checklistItemsInput.map(
+              (item: { text: string }, idx: number) => ({
+                text: item.text,
+                sortOrder: idx,
+              })
+            ),
+          }
+        : undefined,
     },
     include: {
       owner: { select: { id: true, name: true, email: true, image: true } },
       reviewer: { select: { id: true, name: true, email: true, image: true } },
       project: { select: { id: true, name: true, color: true } },
+      checklistItems: { select: { id: true, completed: true } },
     },
   });
 
@@ -96,13 +111,15 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
 
-  // Create calendar event (use current user's token, not task owner's)
-  const calendarEventId = await createCalendarEvent(task, currentUser?.id);
-  if (calendarEventId) {
-    await prisma.task.update({
-      where: { id: task.id },
-      data: { calendarEventId },
-    });
+  // Create calendar event only for scheduled tasks (use current user's token)
+  if (task.startDate && task.deadline) {
+    const calendarEventId = await createCalendarEvent(task, currentUser?.id);
+    if (calendarEventId) {
+      await prisma.task.update({
+        where: { id: task.id },
+        data: { calendarEventId },
+      });
+    }
   }
 
   if (currentUser && ownerId !== currentUser.id) {

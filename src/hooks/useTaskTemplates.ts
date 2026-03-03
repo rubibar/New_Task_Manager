@@ -1,5 +1,5 @@
 import useSWR from "swr";
-import type { TaskTemplate } from "@/types";
+import type { TaskTemplateWithChecklist } from "@/types";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -8,7 +8,7 @@ const fetcher = (url: string) =>
   });
 
 export function useTaskTemplates() {
-  const { data, error, isLoading } = useSWR<TaskTemplate[]>(
+  const { data, error, isLoading } = useSWR<TaskTemplateWithChecklist[]>(
     "/api/task-templates",
     fetcher
   );

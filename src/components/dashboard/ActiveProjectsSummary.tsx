@@ -69,7 +69,7 @@ function ProjectRow({
   const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   const overdueTasks = project.tasks?.filter(
-    (t) => new Date(t.deadline) < new Date() && t.status !== "DONE"
+    (t) => t.deadline && new Date(t.deadline) < new Date() && t.status !== "DONE"
   ).length || 0;
 
   const daysLeft = project.targetFinishDate

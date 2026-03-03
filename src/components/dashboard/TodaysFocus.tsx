@@ -16,7 +16,7 @@ interface TodaysFocusProps {
     id: string;
     title: string;
     status: string;
-    deadline: string | Date;
+    deadline: string | Date | null;
     displayScore: number;
     emergency: boolean;
     project?: { name: string } | null;
@@ -38,13 +38,13 @@ export function TodaysFocus({ userName, tasks }: TodaysFocusProps) {
 
     const activeTasks = tasks.filter((t) => t.status !== "DONE");
     const overdueTasks = activeTasks.filter(
-      (t) => new Date(t.deadline) < now
+      (t) => t.deadline && new Date(t.deadline) < now
     );
     const dueTodayTasks = activeTasks.filter(
-      (t) => new Date(t.deadline).toISOString().split("T")[0] === today
+      (t) => t.deadline && new Date(t.deadline).toISOString().split("T")[0] === today
     );
     const dueTomorrowTasks = activeTasks.filter(
-      (t) => new Date(t.deadline).toISOString().split("T")[0] === tomorrow
+      (t) => t.deadline && new Date(t.deadline).toISOString().split("T")[0] === tomorrow
     );
     const emergencyTasks = activeTasks.filter((t) => t.emergency);
     const topTasks = activeTasks

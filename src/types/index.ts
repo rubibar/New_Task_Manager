@@ -28,6 +28,8 @@ import type {
   AIInsightCache,
   TimeEntry,
   TimeEntryType,
+  ChecklistItem,
+  TemplateChecklistItem,
 } from "@prisma/client";
 
 export type {
@@ -60,12 +62,19 @@ export type {
   AIInsightCache,
   TimeEntry,
   TimeEntryType,
+  ChecklistItem,
+  TemplateChecklistItem,
 };
 
 export type TaskWithRelations = Task & {
   owner: Pick<User, "id" | "name" | "email" | "image">;
   reviewer: Pick<User, "id" | "name" | "email" | "image"> | null;
   project: Pick<Project, "id" | "name" | "color"> | null;
+  checklistItems?: Pick<ChecklistItem, "id" | "completed">[];
+};
+
+export type TaskTemplateWithChecklist = TaskTemplate & {
+  checklistItems: TemplateChecklistItem[];
 };
 
 export type ProjectWithTasks = Project & {
@@ -136,18 +145,17 @@ export type UserWithCapacity = Pick<
 >;
 
 export interface ScoreBreakdown {
-  baseWeight: number;
-  userPriority: number;
-  aging: number;
-  urgencyMultiplier: number;
-  subtotal: number;
+  deadlineProximity: number; // 0-35
+  priority: number;          // 0-25
+  taskType: number;          // 0-10
+  status: number;            // 0-10
+  aging: number;             // 0-10
   boosts: {
-    inReview: number;
-    emergency: number;
-    sundayRD: number;
+    emergency: number;       // 0 or 10
+    sundayRD: number;        // 0 or 5
   };
-  rawScore: number;
-  displayScore: number;
+  rawScore: number;          // 0-100
+  displayScore: number;      // same as rawScore (no normalization)
 }
 
 export interface CreateTaskInput {
@@ -158,10 +166,11 @@ export interface CreateTaskInput {
   ownerId: string;
   reviewerId?: string;
   projectId?: string;
-  startDate: string;
-  deadline: string;
+  startDate?: string;
+  deadline?: string;
   emergency?: boolean;
   estimatedHours?: number;
+  category?: TaskTemplateCategory;
 }
 
 export interface UpdateTaskInput {
@@ -172,10 +181,11 @@ export interface UpdateTaskInput {
   ownerId?: string;
   reviewerId?: string;
   projectId?: string | null;
-  startDate?: string;
-  deadline?: string;
+  startDate?: string | null;
+  deadline?: string | null;
   emergency?: boolean;
   estimatedHours?: number | null;
+  category?: TaskTemplateCategory | null;
 }
 
 export interface LineItem {

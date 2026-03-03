@@ -8,7 +8,7 @@ import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { DatePicker } from "../ui/DatePicker";
 import { createTask } from "@/hooks/useTasks";
-import type { TaskType, Priority } from "@/types";
+import type { TaskType, Priority, TaskTemplateCategory } from "@/types";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -34,6 +34,14 @@ const priorities = [
   { value: "NEITHER", label: "Low Priority" },
 ];
 
+const categories = [
+  { value: "", label: "No phase" },
+  { value: "PRE_PRODUCTION", label: "Pre-Production" },
+  { value: "PRODUCTION", label: "Production" },
+  { value: "POST_PRODUCTION", label: "Post-Production" },
+  { value: "ADMIN", label: "Admin" },
+];
+
 export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
   const { data: session } = useSession();
   const { data: users } = useSWR("/api/users", fetcher);
@@ -50,13 +58,14 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
   const [projectId, setProjectId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [category, setCategory] = useState("");
   const [emergency, setEmergency] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !ownerId || !startDate || !deadline) {
+    if (!title || !ownerId) {
       setError("Please fill in all required fields.");
       return;
     }
@@ -73,9 +82,10 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
         ownerId,
         reviewerId: reviewerId || undefined,
         projectId: projectId || undefined,
-        startDate,
-        deadline,
+        startDate: startDate || undefined,
+        deadline: deadline || undefined,
         emergency,
+        category: (category as TaskTemplateCategory) || undefined,
       });
       // Reset form
       setTitle("");
@@ -86,6 +96,7 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
       setProjectId("");
       setStartDate("");
       setDeadline("");
+      setCategory("");
       setEmergency(false);
       onClose();
     } catch {
@@ -182,23 +193,31 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
           />
         </div>
 
-        {/* Project */}
-        <Select
-          label="Project"
-          options={projectOptions}
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-        />
+        {/* Project + Phase row */}
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label="Project"
+            options={projectOptions}
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          />
+          <Select
+            label="Phase"
+            options={categories}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+        </div>
 
         {/* Dates row */}
         <div className="grid grid-cols-2 gap-4">
           <DatePicker
-            label="Start Date *"
+            label="Start Date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
           />
           <DatePicker
-            label="Deadline *"
+            label="Deadline"
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
           />

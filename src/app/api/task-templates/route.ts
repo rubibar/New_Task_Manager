@@ -11,6 +11,7 @@ export async function GET() {
 
   const templates = await prisma.taskTemplate.findMany({
     orderBy: [{ category: "asc" }, { name: "asc" }],
+    include: { checklistItems: { orderBy: { sortOrder: "asc" } } },
   });
 
   return NextResponse.json(templates);
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, category, defaultPriority, estimatedHours } = body;
+  const { name, category, defaultPriority, estimatedHours, checklistItems } = body;
 
   if (!name?.trim() || !category) {
     return NextResponse.json(
@@ -38,7 +39,18 @@ export async function POST(request: NextRequest) {
       category,
       defaultPriority: defaultPriority || undefined,
       estimatedHours: estimatedHours != null ? Number(estimatedHours) : undefined,
+      checklistItems: checklistItems?.length
+        ? {
+            create: checklistItems.map(
+              (item: { text: string }, index: number) => ({
+                text: item.text,
+                sortOrder: index,
+              })
+            ),
+          }
+        : undefined,
     },
+    include: { checklistItems: { orderBy: { sortOrder: "asc" } } },
   });
 
   return NextResponse.json(template, { status: 201 });

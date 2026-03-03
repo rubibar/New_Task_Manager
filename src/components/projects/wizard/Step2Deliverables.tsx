@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import type { TaskTemplate, UserWithCapacity } from "@/types";
+import type { TaskTemplateWithChecklist, UserWithCapacity } from "@/types";
 
 export interface DeliverableInput {
   name: string;
@@ -30,7 +30,7 @@ export interface Step2Data {
 interface Step2Props {
   data: Step2Data;
   onChange: (data: Step2Data) => void;
-  templates: TaskTemplate[];
+  templates: TaskTemplateWithChecklist[];
   users: UserWithCapacity[];
 }
 
@@ -56,8 +56,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   ADMIN: "Admin",
 };
 
-function groupTemplates(templates: TaskTemplate[]) {
-  const groups: Record<string, TaskTemplate[]> = {};
+function groupTemplates(templates: TaskTemplateWithChecklist[]) {
+  const groups: Record<string, TaskTemplateWithChecklist[]> = {};
   for (const t of templates) {
     if (!groups[t.category]) groups[t.category] = [];
     groups[t.category].push(t);
@@ -382,6 +382,11 @@ export function Step2Deliverables({
                         <span className="text-xs text-slate-700 flex-1">
                           {tmpl.name}
                         </span>
+                        {tmpl.checklistItems?.length > 0 && (
+                          <span className="text-[10px] text-slate-400">
+                            {tmpl.checklistItems.length} steps
+                          </span>
+                        )}
                         {tmpl.estimatedHours && (
                           <span className="text-[10px] text-slate-400">
                             ~{tmpl.estimatedHours}h

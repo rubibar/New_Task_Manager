@@ -8,7 +8,8 @@ import {
   getStatusLabel,
   getTypeColor,
   getTypeLabel,
-  getHeatBgClass,
+  getTaskColor,
+  getCategoryLabel,
   formatDeadline,
 } from "@/lib/utils";
 import type { TaskWithRelations } from "@/types";
@@ -22,7 +23,7 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, onClick, selectable, selected, onToggleSelect }: TaskCardProps) {
-  const heatClass = getHeatBgClass(task.displayScore);
+  const taskColor = getTaskColor(task.project?.color ?? null, task.category ?? null);
 
   return (
     <motion.div
@@ -32,10 +33,13 @@ export function TaskCard({ task, onClick, selectable, selected, onToggleSelect }
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      style={{
+        borderColor: taskColor,
+        backgroundColor: `${taskColor}15`,
+      }}
       className={`
         relative rounded-lg border p-4 cursor-pointer
         hover:shadow-md transition-shadow duration-150
-        ${heatClass}
         ${task.emergency ? "ring-2 ring-red-500 animate-pulse" : ""}
         ${selected ? "ring-2 ring-[#C8FF00]" : ""}
       `}
@@ -82,6 +86,11 @@ export function TaskCard({ task, onClick, selectable, selected, onToggleSelect }
             <Badge className={getTypeColor(task.type)}>
               {getTypeLabel(task.type)}
             </Badge>
+            {task.category && (
+              <Badge className="bg-slate-100 text-slate-600">
+                {getCategoryLabel(task.category)}
+              </Badge>
+            )}
           </div>
 
           <div className="flex items-center gap-3 mt-3">
@@ -104,9 +113,19 @@ export function TaskCard({ task, onClick, selectable, selected, onToggleSelect }
             </div>
 
             {/* Deadline */}
-            <span className="text-xs text-slate-500">
-              {formatDeadline(new Date(task.deadline))}
+            <span className={`text-xs ${task.deadline ? "text-slate-500" : "text-slate-400 italic"}`}>
+              {task.deadline ? formatDeadline(new Date(task.deadline)) : "Unscheduled"}
             </span>
+
+            {/* Checklist progress */}
+            {task.checklistItems && task.checklistItems.length > 0 && (
+              <span className="text-xs text-slate-400 flex items-center gap-0.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                </svg>
+                {task.checklistItems.filter(i => i.completed).length}/{task.checklistItems.length}
+              </span>
+            )}
           </div>
         </div>
 

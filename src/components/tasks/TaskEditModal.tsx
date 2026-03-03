@@ -7,7 +7,7 @@ import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { DatePicker } from "../ui/DatePicker";
 import { updateTask } from "@/hooks/useTasks";
-import type { TaskWithRelations, TaskType, Priority } from "@/types";
+import type { TaskWithRelations, TaskType, Priority, TaskTemplateCategory } from "@/types";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -32,6 +32,14 @@ const priorities = [
   { value: "IMPORTANT_NOT_URGENT", label: "Important (Not Urgent)" },
   { value: "URGENT_NOT_IMPORTANT", label: "Urgent (Not Important)" },
   { value: "NEITHER", label: "Low Priority" },
+];
+
+const categories = [
+  { value: "", label: "No phase" },
+  { value: "PRE_PRODUCTION", label: "Pre-Production" },
+  { value: "PRODUCTION", label: "Production" },
+  { value: "POST_PRODUCTION", label: "Post-Production" },
+  { value: "ADMIN", label: "Admin" },
 ];
 
 function formatDateForInput(dateStr: string | Date | null | undefined): string {
@@ -66,6 +74,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
   const [deadline, setDeadline] = useState("");
   const [emergency, setEmergency] = useState(false);
   const [estimatedHours, setEstimatedHours] = useState("");
+  const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -83,6 +92,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
       setDeadline(formatDateForInput(task.deadline));
       setEmergency(task.emergency);
       setEstimatedHours(task.estimatedHours != null ? String(task.estimatedHours) : "");
+      setCategory(task.category || "");
       setError("");
     }
   }, [task, open]);
@@ -99,11 +109,6 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
       setError("Owner is required.");
       return;
     }
-    if (!startDate || !deadline) {
-      setError("Start date and deadline are required.");
-      return;
-    }
-
     setLoading(true);
     setError("");
 
@@ -116,10 +121,11 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
         ownerId,
         reviewerId: reviewerId || undefined,
         projectId: projectId || null,
-        startDate,
-        deadline,
+        startDate: startDate || null,
+        deadline: deadline || null,
         emergency,
         estimatedHours: estimatedHours ? Number(estimatedHours) : null,
+        category: (category as TaskTemplateCategory) || null,
       });
       onClose();
     } catch {
@@ -218,23 +224,31 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
           />
         </div>
 
-        {/* Project */}
-        <Select
-          label="Project"
-          options={projectOptions}
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-        />
+        {/* Project + Phase row */}
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label="Project"
+            options={projectOptions}
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          />
+          <Select
+            label="Phase"
+            options={categories}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+        </div>
 
         {/* Dates row */}
         <div className="grid grid-cols-2 gap-4">
           <DatePicker
-            label="Start Date *"
+            label="Start Date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
           />
           <DatePicker
-            label="Deadline *"
+            label="Deadline"
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
           />

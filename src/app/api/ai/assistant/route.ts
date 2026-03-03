@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
       ownerId: t.owner.id,
       project: t.project?.name,
       projectId: t.project?.id,
-      startDate: t.startDate.toISOString().split("T")[0],
-      deadline: t.deadline.toISOString().split("T")[0],
+      startDate: t.startDate ? t.startDate.toISOString().split("T")[0] : "unscheduled",
+      deadline: t.deadline ? t.deadline.toISOString().split("T")[0] : "unscheduled",
     })),
   });
 
@@ -181,8 +181,8 @@ async function executeAction(action: Record<string, unknown>): Promise<string> {
           ownerId: action.ownerId as string,
           priority: ((action.priority as string) || "IMPORTANT_NOT_URGENT") as Priority,
           type: ((action.taskType as string) || "CLIENT") as TaskType,
-          startDate: new Date(action.startDate as string),
-          deadline: new Date(action.deadline as string),
+          startDate: action.startDate ? new Date(action.startDate as string) : null,
+          deadline: action.deadline ? new Date(action.deadline as string) : null,
         },
       });
       return `Created task "${task.title}" (${task.id})`;

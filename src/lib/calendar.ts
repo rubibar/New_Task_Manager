@@ -58,6 +58,7 @@ async function getAuthClient(userId: string) {
 function buildEventBody(
   task: Task & { project?: { name: string } | null; owner?: { name: string } | null }
 ) {
+  if (!task.startDate || !task.deadline) return null;
   const projectPrefix = task.project?.name ? `[${task.project.name}] ` : "";
   return {
     summary: `${projectPrefix}${task.title}`,
@@ -83,9 +84,11 @@ export async function createCalendarEvent(
   authUserId?: string
 ): Promise<string | null> {
   try {
+    const event = buildEventBody(task);
+    if (!event) return null;
+
     const auth = await getAuthClient(authUserId || task.ownerId);
     const calendar = google.calendar({ version: "v3", auth });
-    const event = buildEventBody(task);
 
     const response = await calendar.events.insert({
       calendarId: CALENDAR_ID,
@@ -106,9 +109,11 @@ export async function updateCalendarEvent(
   if (!task.calendarEventId) return;
 
   try {
+    const event = buildEventBody(task);
+    if (!event) return; // task has no dates — skip update
+
     const auth = await getAuthClient(authUserId || task.ownerId);
     const calendar = google.calendar({ version: "v3", auth });
-    const event = buildEventBody(task);
 
     await calendar.events.update({
       calendarId: CALENDAR_ID,
@@ -154,9 +159,9 @@ export async function syncCalendarEvents(): Promise<void> {
     return;
   }
 
-  // Get all tasks that have a linked calendar event
+  // Get all scheduled tasks that have a linked calendar event
   const linkedTasks = await prisma.task.findMany({
-    where: { calendarEventId: { not: null } },
+    where: { calendarEventId: { not: null }, startDate: { not: null }, deadline: { not: null } },
     select: { id: true, calendarEventId: true, startDate: true, deadline: true, ownerId: true },
   });
 
@@ -208,9 +213,9 @@ export async function syncCalendarEvents(): Promise<void> {
 
         if (eventStart && eventEnd) {
           const startChanged =
-            Math.abs(task.startDate.getTime() - eventStart.getTime()) > 60000;
+            Math.abs(task.startDate!.getTime() - eventStart.getTime()) > 60000;
           const endChanged =
-            Math.abs(task.deadline.getTime() - eventEnd.getTime()) > 60000;
+            Math.abs(task.deadline!.getTime() - eventEnd.getTime()) > 60000;
 
           if (startChanged || endChanged) {
             await prisma.task.update({

@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       title: task.title,
       type: task.type,
       priority: task.priority,
-      deadline: task.deadline.toISOString().split("T")[0],
+      deadline: task.deadline ? task.deadline.toISOString().split("T")[0] : "no deadline",
       projectId: task.projectId,
       projectName: task.project?.name || null,
       projectType: task.project?.projectType?.name || null,

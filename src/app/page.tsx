@@ -209,13 +209,49 @@ export default function DashboardPage() {
                 task={topTask}
                 onClick={() => topTask && setSelectedTask(topTask)}
               />
-              <HeatmapGrid
-                tasks={restTasks}
-                onTaskClick={setSelectedTask}
-                selectable={batchMode}
-                isSelected={batch.isSelected}
-                onToggleSelect={batch.toggle}
-              />
+
+              {/* Owner-first sorting: My Tasks then Team Tasks */}
+              {(() => {
+                const myTasks = restTasks.filter(t => t.ownerId === userId);
+                const teamTasks = restTasks.filter(t => t.ownerId !== userId);
+                return (
+                  <>
+                    {myTasks.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <h2 className="text-sm font-semibold text-slate-800">My Tasks</h2>
+                          <span className="text-xs text-slate-400">({myTasks.length})</span>
+                        </div>
+                        <HeatmapGrid
+                          tasks={myTasks}
+                          onTaskClick={setSelectedTask}
+                          selectable={batchMode}
+                          isSelected={batch.isSelected}
+                          onToggleSelect={batch.toggle}
+                        />
+                      </div>
+                    )}
+
+                    {teamTasks.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-3 mt-6">
+                          <div className="flex-1 h-px bg-slate-200" />
+                          <h2 className="text-sm font-semibold text-slate-500">Team Tasks</h2>
+                          <span className="text-xs text-slate-400">({teamTasks.length})</span>
+                          <div className="flex-1 h-px bg-slate-200" />
+                        </div>
+                        <HeatmapGrid
+                          tasks={teamTasks}
+                          onTaskClick={setSelectedTask}
+                          selectable={batchMode}
+                          isSelected={batch.isSelected}
+                          onToggleSelect={batch.toggle}
+                        />
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {userId && (

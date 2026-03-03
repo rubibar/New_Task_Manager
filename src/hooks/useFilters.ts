@@ -98,15 +98,15 @@ export function useFilters() {
         );
       }
 
-      // Date range
+      // Date range (only filter tasks that have dates)
       if (filters.dateFrom) {
         const from = new Date(filters.dateFrom);
-        result = result.filter((t) => new Date(t.deadline) >= from);
+        result = result.filter((t) => t.deadline && new Date(t.deadline) >= from);
       }
       if (filters.dateTo) {
         const to = new Date(filters.dateTo);
         to.setHours(23, 59, 59, 999);
-        result = result.filter((t) => new Date(t.startDate) <= to);
+        result = result.filter((t) => t.startDate && new Date(t.startDate) <= to);
       }
 
       return result;

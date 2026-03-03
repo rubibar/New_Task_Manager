@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/Button";
 import type { Step1Data } from "./Step1Details";
 import type { Step2Data } from "./Step2Deliverables";
 import type { WizardInsightResponse } from "@/lib/ai/types";
-import type { ProjectType, TaskTemplate, UserWithCapacity } from "@/types";
+import type { ProjectType, TaskTemplateWithChecklist, UserWithCapacity } from "@/types";
 
 interface Step3Props {
   step1Data: Step1Data;
   step2Data: Step2Data;
   projectTypes: ProjectType[];
-  templates: TaskTemplate[];
+  templates: TaskTemplateWithChecklist[];
   users: UserWithCapacity[];
   onAcceptMilestones: (milestones: { name: string; dueDate: string }[]) => void;
   onAcceptTasks: (tasks: { name: string; startDate: string; deadline: string }[]) => void;

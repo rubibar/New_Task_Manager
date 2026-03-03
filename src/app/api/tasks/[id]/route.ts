@@ -20,6 +20,7 @@ export async function GET(
       owner: { select: { id: true, name: true, email: true, image: true } },
       reviewer: { select: { id: true, name: true, email: true, image: true } },
       project: { select: { id: true, name: true, color: true } },
+      checklistItems: { orderBy: { sortOrder: "asc" } },
     },
   });
 
@@ -50,10 +51,12 @@ export async function PATCH(
   if (body.reviewerId !== undefined) updateData.reviewerId = body.reviewerId;
   if (body.projectId !== undefined) updateData.projectId = body.projectId;
   if (body.startDate !== undefined)
-    updateData.startDate = new Date(body.startDate);
-  if (body.deadline !== undefined) updateData.deadline = new Date(body.deadline);
+    updateData.startDate = body.startDate ? new Date(body.startDate) : null;
+  if (body.deadline !== undefined)
+    updateData.deadline = body.deadline ? new Date(body.deadline) : null;
   if (body.emergency !== undefined) updateData.emergency = body.emergency;
   if (body.estimatedHours !== undefined) updateData.estimatedHours = body.estimatedHours != null ? Number(body.estimatedHours) : null;
+  if (body.category !== undefined) updateData.category = body.category;
 
   const task = await prisma.task.update({
     where: { id: params.id },
@@ -62,6 +65,7 @@ export async function PATCH(
       owner: { select: { id: true, name: true, email: true, image: true } },
       reviewer: { select: { id: true, name: true, email: true, image: true } },
       project: { select: { id: true, name: true, color: true } },
+      checklistItems: { orderBy: { sortOrder: "asc" } },
     },
   });
 
@@ -70,7 +74,13 @@ export async function PATCH(
     where: { email: session.user.email.toLowerCase() },
     select: { id: true },
   });
-  await updateCalendarEvent(task, currentUser?.id);
+  if (task.startDate && task.deadline) {
+    await updateCalendarEvent(task, currentUser?.id);
+  } else if (task.calendarEventId) {
+    // Task was unscheduled — remove calendar event
+    await deleteCalendarEvent(task.calendarEventId, task.ownerId, currentUser?.id);
+    await prisma.task.update({ where: { id: task.id }, data: { calendarEventId: null } });
+  }
 
   // Recalculate all scores after edit
   recalculateAndPersistScores();

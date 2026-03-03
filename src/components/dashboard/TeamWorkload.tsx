@@ -23,7 +23,7 @@ export function TeamWorkload({ tasks }: TeamWorkloadProps) {
   const memberStats = users.map((user) => {
     const userTasks = activeTasks.filter((t) => t.ownerId === user.id);
     const overdue = userTasks.filter(
-      (t) => new Date(t.deadline) < new Date()
+      (t) => t.deadline && new Date(t.deadline) < new Date()
     ).length;
     const inProgress = userTasks.filter((t) => t.status === "IN_PROGRESS").length;
     const inReview = userTasks.filter((t) => t.status === "IN_REVIEW").length;

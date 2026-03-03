@@ -285,6 +285,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
             projectId: project.id,
             startDate: new Date(dates.startDate).toISOString(),
             deadline: new Date(dates.deadline).toISOString(),
+            checklistItems: tmpl.checklistItems?.map((ci: { text: string }) => ({ text: ci.text })) || [],
           }),
         });
       }

@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ScoreBadge } from "@/components/tasks/ScoreBadge";
 import { Badge } from "@/components/ui/Badge";
-import { formatDeadline } from "@/lib/utils";
+import { formatDeadline, getTaskColor } from "@/lib/utils";
 import type { TaskWithRelations } from "@/types";
 
 interface KanbanCardProps {
@@ -17,6 +17,7 @@ interface KanbanCardProps {
 
 export function KanbanCard({ task, onClick, selectable, selected, onToggleSelect }: KanbanCardProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const taskColor = getTaskColor(task.project?.color ?? null, task.category ?? null);
 
   const handleDragStart = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
@@ -31,8 +32,8 @@ export function KanbanCard({ task, onClick, selectable, selected, onToggleSelect
     setIsDragging(false);
   }, []);
 
-  const deadlineText = formatDeadline(new Date(task.deadline));
-  const isOverdue = deadlineText.includes("overdue") || deadlineText === "Due now";
+  const deadlineText = task.deadline ? formatDeadline(new Date(task.deadline)) : "Unscheduled";
+  const isOverdue = task.deadline && (deadlineText.includes("overdue") || deadlineText === "Due now");
 
   return (
     <div
@@ -57,6 +58,12 @@ export function KanbanCard({ task, onClick, selectable, selected, onToggleSelect
           ${isDragging ? "opacity-50" : ""}
         `}
       >
+        {/* Project+phase color bar */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
+          style={{ backgroundColor: taskColor }}
+        />
+
         {/* Batch select checkbox */}
         {selectable && (
           <button
@@ -130,6 +137,16 @@ export function KanbanCard({ task, onClick, selectable, selected, onToggleSelect
             >
               {deadlineText}
             </span>
+
+            {/* Checklist progress */}
+            {task.checklistItems && task.checklistItems.length > 0 && (
+              <span className="text-[11px] text-slate-400 flex items-center gap-0.5 flex-shrink-0">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                </svg>
+                {task.checklistItems.filter(i => i.completed).length}/{task.checklistItems.length}
+              </span>
+            )}
           </div>
 
           {/* Score badge */}

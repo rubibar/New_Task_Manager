@@ -58,9 +58,9 @@ export async function POST(request: NextRequest) {
     status: t.status,
     priority: t.priority,
     owner: t.owner.name,
-    startDate: t.startDate.toISOString().split("T")[0],
-    deadline: t.deadline.toISOString().split("T")[0],
-    isOverdue: t.deadline < new Date() && t.status !== "DONE",
+    startDate: t.startDate ? t.startDate.toISOString().split("T")[0] : "unscheduled",
+    deadline: t.deadline ? t.deadline.toISOString().split("T")[0] : "unscheduled",
+    isOverdue: t.deadline ? t.deadline < new Date() && t.status !== "DONE" : false,
   }));
 
   const deliverableSummary = project.deliverables.map((d) => ({

@@ -14,6 +14,8 @@ import {
   subWeeks,
 } from "date-fns";
 import type { TaskWithRelations } from "@/types";
+import { getTaskColor } from "@/lib/utils";
+import { ScoreBadge } from "@/components/tasks/ScoreBadge";
 
 interface GanttChartProps {
   tasks: TaskWithRelations[];
@@ -25,12 +27,6 @@ interface GanttChartProps {
     deadline: string
   ) => void;
 }
-
-const TYPE_COLORS: Record<string, string> = {
-  CLIENT: "bg-red-200 border-red-300",
-  INTERNAL_RD: "bg-lime-200 border-lime-300",
-  ADMIN: "bg-violet-200 border-violet-300",
-};
 
 const DAY_WIDTH = 40;
 const ROW_HEIGHT = 36;
@@ -57,6 +53,18 @@ export function GanttChart({
   const [viewWeeks, setViewWeeks] = useState(4);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const [unscheduledOpen, setUnscheduledOpen] = useState(true);
+  const [dropTargetDay, setDropTargetDay] = useState<string | null>(null);
+
+  // Split tasks into scheduled (have both dates) and unscheduled
+  const scheduledTasks = useMemo(
+    () => tasks.filter((t) => t.startDate && t.deadline),
+    [tasks]
+  );
+  const unscheduledTasks = useMemo(
+    () => tasks.filter((t) => !t.startDate || !t.deadline),
+    [tasks]
+  );
 
   const now = new Date();
   const viewStart = startOfWeek(subWeeks(now, 1), { weekStartsOn: 0 });
@@ -80,14 +88,14 @@ export function GanttChart({
 
   const totalWidth = days.length * DAY_WIDTH;
 
-  // Group tasks
+  // Group scheduled tasks only
   const groups = useMemo(() => {
     const map = new Map<
       string,
       { label: string; tasks: TaskWithRelations[] }
     >();
 
-    for (const task of tasks) {
+    for (const task of scheduledTasks) {
       let key: string;
       let label: string;
 
@@ -104,7 +112,7 @@ export function GanttChart({
     }
 
     return Array.from(map.values());
-  }, [tasks, groupBy]);
+  }, [scheduledTasks, groupBy]);
 
   const getBarPosition = useCallback(
     (start: Date, end: Date) => {
@@ -153,8 +161,8 @@ export function GanttChart({
         taskId: task.id,
         mode,
         startX: e.clientX,
-        originalStart: new Date(task.startDate),
-        originalEnd: new Date(task.deadline),
+        originalStart: new Date(task.startDate!),
+        originalEnd: new Date(task.deadline!),
         daysDelta: 0,
       };
 
@@ -225,6 +233,33 @@ export function GanttChart({
       document.body.style.userSelect = "";
     };
   }, [drag, handleMouseMove, handleMouseUp]);
+
+  // HTML5 drag handlers for unscheduled chips dropped onto the grid
+  const handleChipDragOver = useCallback(
+    (e: React.DragEvent, dayKey: string) => {
+      if (!e.dataTransfer.types.includes("application/x-unscheduled-task")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (dropTargetDay !== dayKey) setDropTargetDay(dayKey);
+    },
+    [dropTargetDay]
+  );
+
+  const handleChipDragLeave = useCallback(() => {
+    setDropTargetDay(null);
+  }, []);
+
+  const handleChipDrop = useCallback(
+    (e: React.DragEvent, targetDay: Date) => {
+      e.preventDefault();
+      setDropTargetDay(null);
+      const taskId = e.dataTransfer.getData("application/x-unscheduled-task");
+      if (!taskId || !onTaskDatesChange) return;
+      const endDay = addDays(targetDay, 1);
+      onTaskDatesChange(taskId, targetDay.toISOString(), endDay.toISOString());
+    },
+    [onTaskDatesChange]
+  );
 
   const todayOffset = differenceInDays(now, viewStart) * DAY_WIDTH;
 
@@ -313,10 +348,10 @@ export function GanttChart({
                 const dragged = getDraggedDates(task);
                 const taskStart = dragged
                   ? dragged.start
-                  : new Date(task.startDate);
+                  : new Date(task.startDate!);
                 const taskEnd = dragged
                   ? dragged.end
-                  : new Date(task.deadline);
+                  : new Date(task.deadline!);
                 const pos = getBarPosition(taskStart, taskEnd);
                 const isDragging =
                   drag?.taskId === task.id;
@@ -327,17 +362,23 @@ export function GanttChart({
                     className="relative border-b border-slate-50"
                     style={{ height: ROW_HEIGHT }}
                   >
-                    {/* Grid lines */}
-                    <div className="absolute inset-0 flex pointer-events-none">
-                      {days.map((day) => (
-                        <div
-                          key={day.toISOString()}
-                          style={{ width: DAY_WIDTH }}
-                          className={`border-r border-slate-50 ${
-                            isToday(day) ? "bg-red-50/30" : ""
-                          }`}
-                        />
-                      ))}
+                    {/* Grid lines + drop targets */}
+                    <div className="absolute inset-0 flex">
+                      {days.map((day) => {
+                        const dayKey = format(day, "yyyy-MM-dd");
+                        return (
+                          <div
+                            key={day.toISOString()}
+                            style={{ width: DAY_WIDTH }}
+                            className={`border-r border-slate-50 ${
+                              isToday(day) ? "bg-red-50/30" : ""
+                            } ${dropTargetDay === dayKey ? "bg-[#C8FF00]/10" : ""}`}
+                            onDragOver={(e) => handleChipDragOver(e, dayKey)}
+                            onDragLeave={handleChipDragLeave}
+                            onDrop={(e) => handleChipDrop(e, day)}
+                          />
+                        );
+                      })}
                     </div>
 
                     {/* Bar */}
@@ -345,7 +386,6 @@ export function GanttChart({
                       className={`
                         absolute top-1 rounded border flex items-center
                         transition-shadow select-none
-                        ${TYPE_COLORS[task.type] || "bg-slate-200 border-slate-300"}
                         ${task.emergency ? "ring-1 ring-red-500" : ""}
                         ${isDragging ? "shadow-lg opacity-90 z-30" : "hover:shadow-md z-10"}
                       `}
@@ -353,6 +393,8 @@ export function GanttChart({
                         left: pos.left,
                         width: Math.max(pos.width, DAY_WIDTH),
                         height: ROW_HEIGHT - 8,
+                        backgroundColor: getTaskColor(task.project?.color ?? null, task.category ?? null),
+                        borderColor: getTaskColor(task.project?.color ?? null, task.category ?? null),
                       }}
                       title={`${task.title} (${format(taskStart, "MMM d")} - ${format(taskEnd, "MMM d")})`}
                     >
@@ -430,6 +472,95 @@ export function GanttChart({
           />
         </div>
       </div>
+
+      {/* Unscheduled tasks tray */}
+      {unscheduledTasks.length > 0 && (
+        <div className="border-t border-slate-200">
+          <button
+            onClick={() => setUnscheduledOpen(!unscheduledOpen)}
+            className="flex items-center gap-2 w-full px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`text-slate-400 transition-transform ${unscheduledOpen ? "rotate-90" : ""}`}
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+            <span className="text-xs font-semibold text-slate-600">
+              Unscheduled
+            </span>
+            <span className="text-[10px] text-slate-400">
+              ({unscheduledTasks.length})
+            </span>
+            {onTaskDatesChange && (
+              <span className="text-[10px] text-slate-400 ml-auto">
+                Drag onto timeline to schedule
+              </span>
+            )}
+          </button>
+
+          {unscheduledOpen && (
+            <div className="px-4 py-3 flex flex-wrap gap-2 bg-white">
+              {unscheduledTasks.map((task) => {
+                const taskColor = getTaskColor(task.project?.color ?? null, task.category ?? null);
+                return (
+                  <div
+                    key={task.id}
+                    draggable={!!onTaskDatesChange}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("application/x-unscheduled-task", task.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      if (e.currentTarget instanceof HTMLElement) {
+                        e.currentTarget.style.opacity = "0.5";
+                      }
+                    }}
+                    onDragEnd={(e) => {
+                      if (e.currentTarget instanceof HTMLElement) {
+                        e.currentTarget.style.opacity = "1";
+                      }
+                    }}
+                    onClick={() => onTaskClick(task)}
+                    className={`
+                      flex items-center gap-2 px-3 py-1.5 rounded-lg border
+                      bg-white hover:shadow-sm transition-shadow
+                      ${onTaskDatesChange ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}
+                      ${task.emergency ? "ring-1 ring-red-500" : ""}
+                    `}
+                    style={{ borderColor: taskColor }}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: taskColor }}
+                    />
+                    <span className="text-[11px] font-medium text-slate-700 truncate max-w-[160px]">
+                      {task.title}
+                    </span>
+                    {task.owner.image ? (
+                      <img
+                        src={task.owner.image}
+                        alt={task.owner.name}
+                        className="w-4 h-4 rounded-full flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-slate-300 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[7px] font-medium text-slate-600">
+                          {task.owner.name.charAt(0)}
+                        </span>
+                      </div>
+                    )}
+                    <ScoreBadge score={task.displayScore} size="sm" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

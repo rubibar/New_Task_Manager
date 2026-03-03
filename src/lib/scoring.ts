@@ -1,7 +1,6 @@
 import type { Task, TaskType, Priority } from "@prisma/client";
 import {
   getRemainingWorkingHours,
-  getUrgencyMultiplier,
   getTodoAgingHours,
   isSundayRDTime,
   isThursdayMeetingMode,
@@ -9,118 +8,110 @@ import {
 import { prisma } from "@/lib/prisma";
 import type { ScoreBreakdown } from "@/types";
 
-// Base weights by task type
-const BASE_WEIGHTS: Record<TaskType, number> = {
-  CLIENT: 30,
-  INTERNAL_RD: 15,
-  ADMIN: 5,
+// --- Factor 1: Deadline Proximity (0-35) ---
+// Quadratic curve: tasks further out score lower, overdue tasks score max.
+// 80 working hours ≈ 2 work weeks (10 days × 8h).
+const DEADLINE_MAX = 35;
+const DEADLINE_HORIZON = 80; // working hours
+
+function getDeadlineProximityScore(remainingHours: number): number {
+  if (remainingHours <= 0) return DEADLINE_MAX; // overdue → max
+  if (remainingHours >= DEADLINE_HORIZON) return 0; // >2 weeks → 0
+  const normalized = remainingHours / DEADLINE_HORIZON; // 0..1
+  return Math.round(DEADLINE_MAX * Math.pow(1 - normalized, 2) * 10) / 10;
+}
+
+// --- Factor 2: Priority (0-25) ---
+const PRIORITY_SCORES: Record<Priority, number> = {
+  URGENT_IMPORTANT: 25,
+  IMPORTANT_NOT_URGENT: 15,
+  URGENT_NOT_IMPORTANT: 10,
+  NEITHER: 3,
 };
 
-// User priority weights
-const PRIORITY_WEIGHTS: Record<Priority, number> = {
-  URGENT_IMPORTANT: 40,
-  IMPORTANT_NOT_URGENT: 25,
-  URGENT_NOT_IMPORTANT: 15,
-  NEITHER: 5,
+// --- Factor 3: Task Type (0-10) ---
+const TYPE_SCORES: Record<TaskType, number> = {
+  CLIENT: 10,
+  INTERNAL_RD: 6,
+  ADMIN: 3,
 };
+
+// --- Factor 4: Status (0-10) ---
+const STATUS_SCORES: Record<string, number> = {
+  IN_REVIEW: 10,
+  IN_PROGRESS: 5,
+  TODO: 0,
+  DONE: 0,
+};
+
+// --- Factor 5: Aging (0-10, +1 per working day in TODO) ---
+function getAgingScore(todoSince: Date | null, status: string): number {
+  if (status !== "TODO") return 0;
+  const todoHours = getTodoAgingHours(todoSince);
+  const points = Math.floor(todoHours / 8); // +1 per 8 working hours (1 work day)
+  return Math.min(points, 10);
+}
 
 /**
- * Calculate the raw score for a single task.
- * RS = (W_base + W_user + Aging) x U + Boosts
+ * Calculate the absolute score for a single task.
+ * Score = deadlineProximity + priority + taskType + status + aging + boosts
+ * Range: 0-100 (no normalization needed)
  */
-export function calculateRawScore(
-  task: Task,
-  ownerAtCapacity: boolean = false
-): ScoreBreakdown {
-  // If task is DONE or frozen during Thursday meeting, return 0
+export function calculateRawScore(task: Task): ScoreBreakdown {
   if (task.status === "DONE") {
     return {
-      baseWeight: 0,
-      userPriority: 0,
+      deadlineProximity: 0,
+      priority: 0,
+      taskType: 0,
+      status: 0,
       aging: 0,
-      urgencyMultiplier: 0,
-      subtotal: 0,
-      boosts: { inReview: 0, emergency: 0, sundayRD: 0 },
+      boosts: { emergency: 0, sundayRD: 0 },
       rawScore: 0,
       displayScore: 0,
     };
   }
 
-  const baseWeight = BASE_WEIGHTS[task.type];
-  const userPriority = PRIORITY_WEIGHTS[task.priority];
+  const deadlineProximity = task.deadline
+    ? getDeadlineProximityScore(getRemainingWorkingHours(task.deadline))
+    : 0;
+  const priority = PRIORITY_SCORES[task.priority];
+  const taskType = TYPE_SCORES[task.type];
+  const status = STATUS_SCORES[task.status] ?? 0;
+  const aging = getAgingScore(task.todoSince, task.status);
 
-  // Aging: +2 per 24 working hours in TODO
-  const todoHours = task.status === "TODO" ? getTodoAgingHours(task.todoSince) : 0;
-  const aging = Math.floor(todoHours / 24) * 2;
+  const emergencyBoost = task.emergency ? 10 : 0;
+  const sundayRDBoost = isSundayRDTime() && task.type === "INTERNAL_RD" ? 5 : 0;
 
-  // Urgency multiplier based on remaining working hours to deadline
-  const remainingHours = getRemainingWorkingHours(task.deadline);
-  const urgencyMultiplier = getUrgencyMultiplier(remainingHours);
-
-  // Subtotal before boosts
-  const subtotal = (baseWeight + userPriority + aging) * urgencyMultiplier;
-
-  // Boosts
-  let inReviewBoost = 0;
-  let emergencyBoost = 0;
-  let sundayRDBoost = 0;
-
-  if (task.status === "IN_REVIEW") {
-    inReviewBoost = 50;
-  }
-
-  if (task.emergency) {
-    emergencyBoost = 100;
-  }
-
-  if (isSundayRDTime() && task.type === "INTERNAL_RD") {
-    sundayRDBoost = 100;
-  }
-
-  // Capacity penalty: when owner is at capacity, ADMIN tasks get -20
-  let capacityPenalty = 0;
-  if (ownerAtCapacity && task.type === "ADMIN") {
-    capacityPenalty = -20;
-  }
-
-  const rawScore = Math.max(
-    0,
-    subtotal + inReviewBoost + emergencyBoost + sundayRDBoost + capacityPenalty
+  const rawScore = Math.min(
+    100,
+    deadlineProximity + priority + taskType + status + aging + emergencyBoost + sundayRDBoost
   );
 
   return {
-    baseWeight,
-    userPriority,
+    deadlineProximity,
+    priority,
+    taskType,
+    status,
     aging,
-    urgencyMultiplier,
-    subtotal,
-    boosts: {
-      inReview: inReviewBoost,
-      emergency: emergencyBoost,
-      sundayRD: sundayRDBoost,
-    },
+    boosts: { emergency: emergencyBoost, sundayRD: sundayRDBoost },
     rawScore,
-    displayScore: 0, // Will be normalized after all tasks are scored
+    displayScore: rawScore, // absolute — no normalization
   };
 }
 
 /**
- * Calculate scores for all active tasks and normalize to 0-100.
+ * Calculate scores for all active tasks.
  * Returns an array of { taskId, rawScore, displayScore }.
  */
 export function calculateAllScores(
-  tasks: Task[],
-  userCapacityMap: Map<string, boolean>
+  tasks: Task[]
 ): Array<{ taskId: string; rawScore: number; displayScore: number }> {
-  // If Thursday meeting mode is active, freeze all scores
   const frozen = isThursdayMeetingMode();
 
-  // Calculate raw scores for all non-DONE tasks
-  const scored = tasks
+  return tasks
     .filter((t) => t.status !== "DONE")
     .map((task) => {
       if (frozen && task.isFrozen) {
-        // During freeze, keep existing scores
         return {
           taskId: task.id,
           rawScore: task.rawScore,
@@ -128,42 +119,18 @@ export function calculateAllScores(
         };
       }
 
-      const ownerCapacity = userCapacityMap.get(task.ownerId) ?? false;
-      const breakdown = calculateRawScore(task, ownerCapacity);
-
+      const breakdown = calculateRawScore(task);
       return {
         taskId: task.id,
         rawScore: breakdown.rawScore,
-        displayScore: 0,
+        displayScore: breakdown.displayScore,
       };
     });
-
-  // --- Curved normalization (sqrt) ---
-  // Linear normalization crushes lower scores when one task is extremely high.
-  // Sqrt-based normalization spreads scores more evenly across 0-100.
-  // Example: with maxRaw=275, a task at rawScore=70 gets:
-  //   Linear:  70/275*100 = 25   (too compressed)
-  //   Sqrt:    sqrt(70/275)*100 = 50  (much better spread)
-
-  const maxRaw = Math.max(...scored.map((s) => s.rawScore), 1);
-
-  return scored.map((s) => {
-    if (s.rawScore <= 0) return { ...s, displayScore: 0 };
-
-    const ratio = s.rawScore / maxRaw;
-    // Power 0.55 (close to sqrt) gives a good spread while preserving ranking
-    const curved = Math.pow(ratio, 0.55);
-    // Floor of 5 — no active task should show as 0
-    const display = Math.max(5, Math.round(curved * 100));
-
-    return { ...s, displayScore: display };
-  });
 }
 
 /**
  * Recalculate scores for ALL active tasks and persist to DB.
  * Call this after any task mutation (create, update, status change, delete).
- * Runs in the background — does not block the response.
  */
 export async function recalculateAndPersistScores(): Promise<void> {
   try {
@@ -171,14 +138,8 @@ export async function recalculateAndPersistScores(): Promise<void> {
       where: { status: { not: "DONE" } },
     });
 
-    const users = await prisma.user.findMany({
-      select: { id: true, atCapacity: true },
-    });
-    const capacityMap = new Map(users.map((u) => [u.id, u.atCapacity]));
+    const scores = calculateAllScores(tasks);
 
-    const scores = calculateAllScores(tasks, capacityMap);
-
-    // Batch update all scores
     await Promise.all(
       scores.map((s) =>
         prisma.task.update({

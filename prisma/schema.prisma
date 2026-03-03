@@ -196,8 +196,9 @@ model Task {
   reviewerId      String?
   reviewer        User?        @relation("TaskReviewer", fields: [reviewerId], references: [id])
 
-  startDate       DateTime
-  deadline        DateTime
+  startDate       DateTime?
+  deadline        DateTime?
+  category        TaskTemplateCategory?
 
   emergency       Boolean      @default(false)
   isFrozen        Boolean      @default(false)
@@ -212,6 +213,7 @@ model Task {
 
   estimatedHours  Float?
   timeEntries     TimeEntry[]
+  checklistItems  ChecklistItem[]
 
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -383,6 +385,7 @@ model TaskTemplate {
   category       TaskTemplateCategory
   defaultPriority String?
   estimatedHours Float?
+  checklistItems TemplateChecklistItem[]
   createdAt      DateTime             @default(now())
 }
 
@@ -413,4 +416,27 @@ enum NotificationType {
   SCORE_CHANGE
   TASK_ASSIGNED
   CALENDAR_SYNC
+}
+
+model TemplateChecklistItem {
+  id         String       @id @default(cuid())
+  templateId String
+  template   TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  text       String
+  sortOrder  Int          @default(0)
+
+  @@index([templateId])
+}
+
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  text      String
+  completed Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
 }

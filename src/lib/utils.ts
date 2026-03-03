@@ -95,7 +95,8 @@ export function getPriorityLabel(priority: string): string {
   }
 }
 
-export function formatDeadline(deadline: Date): string {
+export function formatDeadline(deadline: Date | null): string {
+  if (!deadline) return "No deadline";
   const now = new Date();
   const diff = deadline.getTime() - now.getTime();
   const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -117,6 +118,84 @@ export function formatDeadline(deadline: Date): string {
     month: "short",
     day: "numeric",
   });
+}
+
+// --- Color Utilities ---
+
+function hexToHSL(hex: string): { h: number; s: number; l: number } {
+  hex = hex.replace(/^#/, "");
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+const DEFAULT_NO_PROJECT_COLOR = "#D4A574"; // warm amber/sand for unassigned tasks
+
+export function getTaskColor(
+  projectColor: string | null | undefined,
+  category: string | null | undefined
+): string {
+  const baseHex = projectColor || DEFAULT_NO_PROJECT_COLOR;
+
+  if (!category) return baseHex;
+
+  const hsl = hexToHSL(baseHex);
+
+  switch (category) {
+    case "PRE_PRODUCTION":
+      return hslToHex(hsl.h, hsl.s, Math.min(hsl.l + 30, 95));
+    case "PRODUCTION":
+      return baseHex;
+    case "POST_PRODUCTION":
+      return hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 20, 10));
+    case "ADMIN":
+      return hslToHex(hsl.h, Math.max(hsl.s * 0.5, 0), hsl.l);
+    default:
+      return baseHex;
+  }
+}
+
+export function getCategoryLabel(category: string | null | undefined): string {
+  switch (category) {
+    case "PRE_PRODUCTION": return "Pre-Production";
+    case "PRODUCTION": return "Production";
+    case "POST_PRODUCTION": return "Post-Production";
+    case "ADMIN": return "Admin";
+    default: return "";
+  }
 }
 
 export const ALLOWED_EMAILS = [

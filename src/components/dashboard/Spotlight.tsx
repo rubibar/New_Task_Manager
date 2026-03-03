@@ -75,8 +75,8 @@ export function Spotlight({ task, onClick }: SpotlightProps) {
             </div>
 
             {/* Deadline */}
-            <span className="text-sm text-slate-500">
-              {formatDeadline(new Date(task.deadline))}
+            <span className={`text-sm ${task.deadline ? "text-slate-500" : "text-slate-400 italic"}`}>
+              {task.deadline ? formatDeadline(new Date(task.deadline)) : "Unscheduled"}
             </span>
 
             {/* Type */}

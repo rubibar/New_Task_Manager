@@ -3,14 +3,14 @@
 import type { Step1Data } from "./Step1Details";
 import type { Step2Data } from "./Step2Deliverables";
 import type { Step4Data, FolderNode } from "./Step4Folders";
-import type { ProjectType, TaskTemplate, UserWithCapacity } from "@/types";
+import type { ProjectType, TaskTemplateWithChecklist, UserWithCapacity } from "@/types";
 
 interface Step5Props {
   step1Data: Step1Data;
   step2Data: Step2Data;
   step4Data: Step4Data;
   projectTypes: ProjectType[];
-  templates: TaskTemplate[];
+  templates: TaskTemplateWithChecklist[];
   users: UserWithCapacity[];
   onJumpToStep: (step: number) => void;
 }

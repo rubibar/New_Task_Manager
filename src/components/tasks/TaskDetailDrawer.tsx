@@ -7,12 +7,14 @@ import { Badge } from "../ui/Badge";
 import { ScoreBadge } from "./ScoreBadge";
 import { TaskEditModal } from "./TaskEditModal";
 import { TaskTimer } from "@/components/time-tracking/TaskTimer";
+import { TaskChecklist } from "./TaskChecklist";
 import {
   getStatusColor,
   getStatusLabel,
   getTypeColor,
   getTypeLabel,
   getPriorityLabel,
+  getCategoryLabel,
   formatDeadline,
 } from "@/lib/utils";
 import { changeTaskStatus, toggleEmergency, deleteTask } from "@/hooks/useTasks";
@@ -162,6 +164,9 @@ export function TaskDetailDrawer({
           </div>
         )}
 
+        {/* Checklist */}
+        <TaskChecklist taskId={task.id} />
+
         {/* Meta grid */}
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -189,6 +194,17 @@ export function TaskDetailDrawer({
             </Badge>
           </div>
 
+          {task.category && (
+            <div>
+              <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
+                Phase
+              </h4>
+              <span className="text-sm text-slate-800">
+                {getCategoryLabel(task.category)}
+              </span>
+            </div>
+          )}
+
           <div>
             <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
               Priority
@@ -202,8 +218,8 @@ export function TaskDetailDrawer({
             <h4 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
               Deadline
             </h4>
-            <span className="text-sm text-slate-800">
-              {formatDeadline(new Date(task.deadline))}
+            <span className={`text-sm ${task.deadline ? "text-slate-800" : "text-slate-400 italic"}`}>
+              {task.deadline ? formatDeadline(new Date(task.deadline)) : "Not set"}
             </span>
           </div>
 
@@ -256,13 +272,17 @@ export function TaskDetailDrawer({
             Score Breakdown
           </h4>
           <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 font-mono space-y-1">
-            <p>Raw Score: {task.rawScore.toFixed(1)}</p>
-            <p>Display Score: {task.displayScore.toFixed(0)}/100</p>
+            <p className="font-semibold text-slate-800">Score: {task.displayScore.toFixed(0)}/100</p>
+            <p className="text-slate-400 mt-1">Factors:</p>
+            <p>Deadline proximity: up to 35</p>
+            <p>Priority: {getPriorityLabel(task.priority)}</p>
+            <p>Type: {getTypeLabel(task.type)}</p>
+            <p>Status: {getStatusLabel(task.status)}</p>
             {task.emergency && (
-              <p className="text-red-600">+ Emergency Boost (+100)</p>
+              <p className="text-red-600">+ Emergency (+10)</p>
             )}
             {task.status === "IN_REVIEW" && (
-              <p className="text-amber-600">+ Review Boost (+50)</p>
+              <p className="text-amber-600">+ In Review status (+10)</p>
             )}
           </div>
         </div>

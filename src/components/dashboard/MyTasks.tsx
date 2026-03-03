@@ -31,6 +31,7 @@ export function MyTasks({ tasks, currentUserId, onTaskClick }: MyTasksProps) {
   const threeDaysOut = new Date(now.getTime() + 3 * 86400000).toISOString().split("T")[0];
 
   const filteredTasks = myTasks.filter((t) => {
+    if (!t.deadline) return filter === "all";
     const deadlineDate = new Date(t.deadline).toISOString().split("T")[0];
     switch (filter) {
       case "overdue":
@@ -44,9 +45,9 @@ export function MyTasks({ tasks, currentUserId, onTaskClick }: MyTasksProps) {
     }
   });
 
-  const overdueCount = myTasks.filter((t) => new Date(t.deadline) < now).length;
+  const overdueCount = myTasks.filter((t) => t.deadline && new Date(t.deadline) < now).length;
   const todayCount = myTasks.filter(
-    (t) => new Date(t.deadline).toISOString().split("T")[0] === today
+    (t) => t.deadline && new Date(t.deadline).toISOString().split("T")[0] === today
   ).length;
 
   const filterOptions = [
@@ -129,12 +130,12 @@ export function MyTasks({ tasks, currentUserId, onTaskClick }: MyTasksProps) {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span
                     className={`text-[11px] ${
-                      new Date(task.deadline) < now
+                      task.deadline && new Date(task.deadline) < now
                         ? "text-red-500 font-medium"
-                        : "text-slate-500"
+                        : task.deadline ? "text-slate-500" : "text-slate-400 italic"
                     }`}
                   >
-                    {formatDeadline(new Date(task.deadline))}
+                    {task.deadline ? formatDeadline(new Date(task.deadline)) : "Unscheduled"}
                   </span>
                   <ScoreBadge score={task.displayScore} size="sm" />
                 </div>

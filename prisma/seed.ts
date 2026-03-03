@@ -293,6 +293,58 @@ async function main() {
 
   console.log(`Seeded ${taskTemplates.length} task templates`);
 
+  // Seed template checklist items
+  const templateChecklists: Record<string, string[]> = {
+    "Client brief review": ["Read brief thoroughly", "Note unclear requirements", "Prepare questions", "Schedule kickoff call"],
+    "Mood board creation": ["Gather visual references", "Organize by theme", "Select top directions", "Present to team"],
+    "Reference gathering": ["Search similar projects", "Collect style references", "Compile technical references", "Organize in shared folder"],
+    "Concept development": ["Brainstorm concepts", "Sketch initial ideas", "Develop 2-3 directions", "Internal critique", "Refine chosen direction"],
+    "Storyboarding": ["Script breakdown", "Thumbnail sketches", "Detailed frames", "Timing notes", "Internal review"],
+    "Asset audit": ["List all required assets", "Check existing library", "Identify gaps", "Plan asset creation"],
+    "3D modeling": ["Reference gathering", "Base mesh", "Sculpt detail", "Retopology", "UV unwrap", "Test render"],
+    "Texturing/shading": ["Material reference", "Base textures", "Detail maps", "Shader setup", "Look dev render"],
+    "Animation": ["Block keyframes", "Refine timing", "Secondary motion", "Polish arcs", "Playblast review"],
+    "Compositing": ["Import all passes", "Color correct", "Add effects", "Final composite", "Output check"],
+    "Editing": ["Assemble rough cut", "Refine pacing", "Add transitions", "Review cut", "Lock edit"],
+    "Color grading": ["Set base grade", "Scene matching", "Creative look", "Output verification"],
+    "Sound design": ["Spot sound effects", "Source/create SFX", "Mix levels", "Review with picture"],
+    "AI model training/deployment": ["Prepare dataset", "Configure model", "Train and evaluate", "Fine-tune parameters", "Deploy and test", "Monitor performance"],
+    "Web development": ["Setup project", "Build components", "Integrate API", "Responsive check", "Cross-browser test", "Deploy staging"],
+    "Print layout": ["Set up document", "Place content", "Typography check", "Color proofing", "Prepare print files"],
+    "Internal review": ["Prepare review materials", "Schedule review session", "Collect feedback", "Document action items"],
+    "Client review rounds": ["Send for review", "Collect feedback", "Log revisions", "Get approval"],
+    "Revisions": ["Review feedback list", "Prioritize changes", "Implement revisions", "Internal QA", "Send for re-review"],
+    "Final render/export": ["Check render settings", "Queue final renders", "Verify quality", "Export all formats"],
+    "File packaging": ["Organize deliverables", "Add documentation", "Compress files", "Upload to delivery platform"],
+    "Contract/SOW": ["Draft scope", "Define deliverables", "Set milestones", "Legal review", "Send for signature"],
+    "Invoice creation": ["Calculate billable hours", "Create line items", "Review totals", "Send invoice"],
+    "Asset delivery": ["Verify all assets", "Package per spec", "Upload to client portal", "Send notification"],
+    "Project archival": ["Gather all project files", "Organize folder structure", "Remove temp files", "Archive to storage"],
+    "Backup": ["Verify backup targets", "Run backup", "Verify integrity"],
+  };
+
+  for (const [templateName, checklistTexts] of Object.entries(templateChecklists)) {
+    const template = await prisma.taskTemplate.findFirst({
+      where: { name: templateName },
+    });
+    if (template) {
+      await prisma.templateChecklistItem.deleteMany({
+        where: { templateId: template.id },
+      });
+      for (let i = 0; i < checklistTexts.length; i++) {
+        await prisma.templateChecklistItem.create({
+          data: {
+            templateId: template.id,
+            text: checklistTexts[i],
+            sortOrder: i,
+          },
+        });
+      }
+    }
+  }
+
+  console.log("Seeded template checklist items");
+
   // Seed default folder templates for Motion Graphics
   const motionGraphicsType = await prisma.projectType.findUnique({
     where: { name: "Motion Graphics" },
