@@ -64,6 +64,7 @@ interface BotResponse {
   reply: string;
   taskData?: Record<string, unknown>;
   proactiveFollowUp?: string;
+  mood?: "normal" | "stressed" | "urgent" | "positive";
 }
 
 // --- Helpers ---
@@ -123,9 +124,21 @@ export async function POST(request: NextRequest) {
     if (message.from?.is_bot) return NextResponse.json({ ok: true });
 
     const chatIdStr = String(message.chat.id);
+
+    // Clean up expired bot conversations (fire-and-forget)
     prisma.botConversation
       .deleteMany({ where: { expiresAt: { lt: new Date() } } })
       .catch(() => {});
+
+    // Save incoming message to conversation history
+    prisma.conversationHistory.create({
+      data: {
+        chatId: chatIdStr,
+        role: "user",
+        message: message.text,
+        fromName: message.from?.first_name ?? null,
+      },
+    }).catch(() => {});
 
     const pendingConvo = await prisma.botConversation.findFirst({
       where: { chatId: chatIdStr, expiresAt: { gt: new Date() } },
@@ -141,8 +154,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Load full context: tasks, projects with task counts, users, clients, deliverables, milestones
-    const [tasks, projects, users, clients, deliverables, milestones] = await Promise.all([
+    // Load full context in parallel
+    const [tasks, projects, users, clients, deliverables, milestones, conversationHistory, recentDecisions] = await Promise.all([
       prisma.task.findMany({
         include: {
           owner: { select: { id: true, name: true, email: true } },
@@ -170,6 +183,18 @@ export async function POST(request: NextRequest) {
         select: { id: true, name: true, dueDate: true, completed: true, projectId: true },
         orderBy: { dueDate: "asc" },
         take: 20,
+      }),
+      prisma.conversationHistory.findMany({
+        where: { chatId: chatIdStr },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { role: true, message: true, fromName: true, createdAt: true },
+      }),
+      prisma.decision.findMany({
+        where: { chatId: chatIdStr },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: { summary: true, madeBy: true, createdAt: true },
       }),
     ]);
 
@@ -223,13 +248,27 @@ export async function POST(request: NextRequest) {
         completed: m.completed,
         projectId: m.projectId,
       })),
+      recentDecisions: recentDecisions.map((d) => ({
+        summary: d.summary,
+        madeBy: d.madeBy,
+        date: d.createdAt.toISOString().split("T")[0],
+      })),
     });
+
+    // Build conversation history for Claude (chronological order)
+    const chatHistory = conversationHistory
+      .reverse()
+      .map((m) => {
+        const name = m.fromName ?? (m.role === "bot" ? "Replica" : "User");
+        return `[${m.role}] ${name}: ${m.message}`;
+      })
+      .join("\n");
 
     const pendingContext = pendingConvo
       ? `\n\nPENDING CONVERSATION:\nAction: ${pendingConvo.pendingAction}\nPartial data so far: ${JSON.stringify(pendingConvo.partialTask)}\nThe user is replying to your previous follow-up question. Use the partial data above and merge it with their new answer.`
       : "";
 
-    const userMessage = `STUDIO STATE:\n${contextBlock}${pendingContext}\n\nTELEGRAM MESSAGE from ${message.from?.first_name}:\n${message.text}`;
+    const userMessage = `STUDIO STATE:\n${contextBlock}\n\nRECENT CHAT HISTORY (last 50 messages):\n${chatHistory}${pendingContext}\n\nNEW MESSAGE from ${message.from?.first_name}:\n${message.text}`;
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -258,7 +297,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    console.log("[Telegram Bot] Action:", botResponse.action, "TaskData:", JSON.stringify(botResponse.taskData ?? null));
+    console.log("[Telegram Bot] Action:", botResponse.action, "Mood:", botResponse.mood ?? "normal", "TaskData:", JSON.stringify(botResponse.taskData ?? null));
 
     // Manage conversation state
     if (botResponse.action === "ask_followup") {
@@ -328,16 +367,37 @@ export async function POST(request: NextRequest) {
       case "delete_project":
         if (td) await handleDeleteProject(td);
         break;
-      // query, reply, proactive_nudge, query_by_person — no DB writes needed
+      case "record_decision":
+        if (td) await handleRecordDecision(td, chatIdStr, message.from?.first_name);
+        break;
     }
 
     // Send reply
     if (botResponse.reply) {
       await sendMessage(message.chat.id, botResponse.reply, message.message_id);
+
+      // Save bot reply to conversation history
+      prisma.conversationHistory.create({
+        data: {
+          chatId: chatIdStr,
+          role: "bot",
+          message: botResponse.reply,
+          fromName: "Replica",
+        },
+      }).catch(() => {});
     }
 
     if (botResponse.proactiveFollowUp) {
       await sendMessage(message.chat.id, botResponse.proactiveFollowUp);
+
+      prisma.conversationHistory.create({
+        data: {
+          chatId: chatIdStr,
+          role: "bot",
+          message: botResponse.proactiveFollowUp,
+          fromName: "Replica",
+        },
+      }).catch(() => {});
     }
 
     if (addedTaskOwnerId) {
@@ -349,6 +409,27 @@ export async function POST(request: NextRequest) {
     console.error("Telegram webhook error:", error);
     return NextResponse.json({ ok: true });
   }
+}
+
+// ==================== MEMORY HANDLERS ====================
+
+async function handleRecordDecision(
+  taskData: Record<string, unknown>,
+  chatId: string,
+  senderName?: string
+) {
+  const summary = taskData.summary as string;
+  const madeBy = (taskData.madeBy as string) ?? senderName ?? "Unknown";
+
+  if (!summary) {
+    console.log("[Telegram Bot] record_decision: no summary");
+    return;
+  }
+
+  await prisma.decision.create({
+    data: { summary, madeBy, chatId },
+  });
+  console.log("[Telegram Bot] Recorded decision:", summary, "by", madeBy);
 }
 
 // ==================== TASK HANDLERS ====================
@@ -506,7 +587,6 @@ async function handleBulkUpdateTasks(
     return;
   }
 
-  // Build Prisma where clause from filter
   const where: Record<string, unknown> = {};
   if (filter.assignee) {
     const uid = resolveUserId(filter.assignee as string, users);
@@ -532,7 +612,6 @@ async function handleBulkUpdateTasks(
     where.type = TYPE_MAP[key] ?? filter.type;
   }
 
-  // Build update data
   const data: Record<string, unknown> = {};
   if (updates.status) {
     const s = (updates.status as string).toLowerCase().replace(/\s+/g, "_");
@@ -726,14 +805,12 @@ async function handleDeleteProject(taskData: Record<string, unknown>) {
     const result = await prisma.task.deleteMany({ where: { projectId: project.id } });
     console.log("[Telegram Bot] Deleted", result.count, "tasks from project");
   } else {
-    // Unlink tasks (set projectId to null)
     await prisma.task.updateMany({
       where: { projectId: project.id },
       data: { projectId: null },
     });
   }
 
-  // Delete deliverables and milestones (cascade handles some, but be explicit)
   await prisma.deliverable.deleteMany({ where: { projectId: project.id } });
   await prisma.milestone.deleteMany({ where: { projectId: project.id } });
   await prisma.project.delete({ where: { id: project.id } });

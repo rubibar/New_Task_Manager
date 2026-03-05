@@ -450,6 +450,27 @@ model ChecklistItem {
   @@index([taskId])
 }
 
+model ConversationHistory {
+  id        String   @id @default(cuid())
+  chatId    String
+  role      String
+  message   String   @db.Text
+  fromName  String?
+  createdAt DateTime @default(now())
+
+  @@index([chatId, createdAt])
+}
+
+model Decision {
+  id        String   @id @default(cuid())
+  summary   String
+  madeBy    String
+  chatId    String
+  createdAt DateTime @default(now())
+
+  @@index([chatId, createdAt])
+}
+
 model BotConversation {
   id            String   @id @default(cuid())
   chatId        String
