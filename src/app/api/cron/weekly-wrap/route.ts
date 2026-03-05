@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { sendMessage } from "@/lib/telegram";
 import { analyzePatterns } from "@/lib/patterns";
-import { startOfWeek } from "date-fns";
+import { startOfWeek, addDays } from "date-fns";
 
 const CHAT_ID = Number(process.env.TELEGRAM_GROUP_CHAT_ID);
 
@@ -87,6 +87,24 @@ export async function POST(request: NextRequest) {
         .join(", ");
     }
 
+    // --- THURSDAY PLANNING: unplanned tasks ---
+    const twoWeeksOut = addDays(now, 14);
+    const unplannedTasks = await prisma.task.findMany({
+      where: {
+        status: { in: ["TODO", "IN_PROGRESS"] },
+        OR: [
+          { deadline: null },
+          { deadline: { gt: twoWeeksOut } },
+        ],
+      },
+      include: {
+        owner: { select: { name: true } },
+        project: { select: { name: true } },
+      },
+      orderBy: { displayScore: "desc" },
+      take: 15,
+    });
+
     const summary = JSON.stringify({
       completed: completedThisWeek.map((t) => ({
         title: t.title,
@@ -102,6 +120,13 @@ export async function POST(request: NextRequest) {
         deadline: t.deadline?.toISOString().split("T")[0] ?? null,
         emergency: t.emergency,
       })),
+      unplannedTasks: unplannedTasks.map((t) => ({
+        title: t.title,
+        owner: t.owner?.name,
+        project: t.project?.name ?? null,
+        priority: t.priority,
+        deadline: t.deadline?.toISOString().split("T")[0] ?? null,
+      })),
       patternInsights: patterns.summary,
       velocitySummary,
     });
@@ -113,8 +138,8 @@ export async function POST(request: NextRequest) {
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      system: `You write a weekly wrap-up message in Hebrew for a 3-person animation studio Telegram group.
+      max_tokens: 1500,
+      system: `You write a weekly wrap-up AND planning facilitator message in Hebrew for a 3-person animation studio Telegram group.
 Team: Rubi Barazani, Gilad Rozenkoff, Dana.
 This runs Wednesday afternoon before Thursday's planning meeting.
 Be warm, concise, direct. Max 2 emojis total.
@@ -123,8 +148,9 @@ Format:
 - If velocity data is provided, include the completion speed insight (estimates vs actuals)
 - Highlight anything still open that's urgent or overdue
 - If pattern insights are provided, weave ONE trend naturally into the message
-- One short nudge or encouragement for the team heading into planning
-Keep it under 1500 characters.`,
+- PLANNING SECTION: If unplannedTasks are provided, list them under a "זמן תכנון" header and ask the team to set deadlines/priorities for next week. For each unplanned task, mention who owns it and suggest it needs a deadline.
+- One short nudge for the team heading into planning
+Keep it under 2000 characters.`,
       messages: [
         {
           role: "user",

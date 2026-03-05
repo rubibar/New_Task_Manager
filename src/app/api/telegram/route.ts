@@ -251,6 +251,7 @@ export async function POST(request: NextRequest) {
         deadline: t.deadline?.toISOString().split("T")[0] ?? null,
         emergency: t.emergency,
         score: t.displayScore,
+        estimatedHours: t.estimatedHours,
       })),
       clients: clients.map((c) => ({
         id: c.id,
@@ -394,6 +395,12 @@ export async function POST(request: NextRequest) {
       case "record_decision":
         if (td) await handleRecordDecision(td, chatIdStr, message.from?.first_name);
         break;
+      case "set_estimate":
+        if (td) await handleSetEstimate(td);
+        break;
+      case "approve_weekly_plan":
+        if (td) await handleApproveWeeklyPlan(chatIdStr, message.from?.first_name);
+        break;
     }
 
     // Send reply
@@ -456,6 +463,46 @@ async function handleRecordDecision(
   console.log("[Telegram Bot] Recorded decision:", summary, "by", madeBy);
 }
 
+// ==================== PLANNING HANDLERS ====================
+
+async function handleSetEstimate(taskData: Record<string, unknown>) {
+  const task = await findTaskByIdOrTitle(taskData);
+  if (!task) {
+    console.log("[Telegram Bot] set_estimate: task not found", taskData.taskId, taskData.title);
+    return;
+  }
+
+  const hours = Number(taskData.estimatedHours);
+  if (isNaN(hours) || hours <= 0) {
+    console.log("[Telegram Bot] set_estimate: invalid hours", taskData.estimatedHours);
+    return;
+  }
+
+  await prisma.task.update({
+    where: { id: task.id },
+    data: { estimatedHours: hours },
+  });
+  console.log("[Telegram Bot] Set estimate:", task.title, `${hours}h`);
+}
+
+async function handleApproveWeeklyPlan(chatId: string, approvedBy?: string) {
+  const plan = await prisma.weeklyPlan.findFirst({
+    where: { chatId, approved: false },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!plan) {
+    console.log("[Telegram Bot] approve_weekly_plan: no pending plan found");
+    return;
+  }
+
+  await prisma.weeklyPlan.update({
+    where: { id: plan.id },
+    data: { approved: true, approvedBy: approvedBy ?? "Unknown" },
+  });
+  console.log("[Telegram Bot] Weekly plan approved by", approvedBy);
+}
+
 // ==================== TASK HANDLERS ====================
 
 async function handleAddTask(
@@ -492,6 +539,7 @@ async function handleAddTask(
       type: TYPE_MAP[typeKey] ?? "CLIENT",
       status: "TODO",
       deadline: taskData.dueDate ? new Date(taskData.dueDate as string) : null,
+      estimatedHours: taskData.estimatedHours ? Number(taskData.estimatedHours) : undefined,
       todoSince: new Date(),
     },
   });

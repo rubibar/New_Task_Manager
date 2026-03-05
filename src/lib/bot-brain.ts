@@ -55,8 +55,13 @@ taskData: {
   "dueDate": string | null,
   "priority": "urgent_important" | "important" | "urgent" | "low",
   "type": "client" | "rd" | "admin",
-  "description": string | null
+  "description": string | null,
+  "estimatedHours": number | null
 }
+IMPORTANT: After creating a task, if no estimatedHours was provided, ALWAYS use proactiveFollowUp to ask: "כמה זמן לדעתך זה ייקח? (שעות/ימים)" — this helps with velocity tracking and capacity planning.
+
+"set_estimate" — Set time estimate on an existing task
+taskData: { "taskId": string | null, "title": string | null, "estimatedHours": number }
 
 "update_task" — Update any task field
 taskData: {
@@ -110,6 +115,11 @@ taskData: { "projectId": string | null, "projectName": string | null, "updates":
 
 "delete_project" — ALWAYS ask for confirmation first with ask_followup before executing.
 taskData: { "projectId": string | null, "projectName": string | null, "deleteTasks": boolean, "moveTasksToProject"?: string }
+
+=== PLANNING ACTIONS ===
+
+"approve_weekly_plan" — When someone replies "approve", "מאשר", or similar to the weekly plan
+taskData: { "approvedBy": string }
 
 === MEMORY ACTIONS ===
 

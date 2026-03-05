@@ -482,6 +482,18 @@ model BotConversation {
   @@index([chatId])
 }
 
+model WeeklyPlan {
+  id         String   @id @default(cuid())
+  chatId     String
+  weekStart  DateTime
+  plan       Json
+  approved   Boolean  @default(false)
+  approvedBy String?
+  createdAt  DateTime @default(now())
+
+  @@index([chatId, weekStart])
+}
+
 model WorkloadLog {
   id           String   @id @default(cuid())
   userId       String

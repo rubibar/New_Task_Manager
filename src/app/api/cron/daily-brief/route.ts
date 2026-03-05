@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { sendMessage } from "@/lib/telegram";
-import { subDays, startOfDay, endOfDay } from "date-fns";
+import { subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from "date-fns";
 
 const CHAT_ID = Number(process.env.TELEGRAM_GROUP_CHAT_ID);
 
@@ -167,6 +167,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // --- BUFFER WARNING (capacity check) ---
+    const weekStart = startOfWeek(now, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
+
+    const thisWeekTasks = openTasks.filter(
+      (t) => t.deadline && t.deadline >= weekStart && t.deadline <= weekEnd
+    );
+    const totalEstimatedHours = thisWeekTasks.reduce(
+      (sum, t) => sum + (t.estimatedHours ?? 2), // default 2h if no estimate
+      0
+    );
+    const WEEKLY_CAPACITY = 90; // 6 productive hours × 5 days × 3 people
+    const capacityPercent = Math.round((totalEstimatedHours / WEEKLY_CAPACITY) * 100);
+
+    let bufferWarning: string | null = null;
+    if (totalEstimatedHours > WEEKLY_CAPACITY * 0.75) {
+      bufferWarning = `~${Math.round(totalEstimatedHours)} estimated hours this week on ${WEEKLY_CAPACITY}h capacity (${capacityPercent}%). Consider deferring lower-priority tasks.`;
+    }
+
+    // --- APPROVED PLAN CONTEXT ---
+    const approvedPlan = await prisma.weeklyPlan.findFirst({
+      where: {
+        chatId: String(CHAT_ID),
+        weekStart: { gte: weekStart },
+        approved: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
     const briefData = JSON.stringify({
       date: now.toISOString().split("T")[0],
       teamMembers: users.map((u) => u.name),
@@ -201,6 +230,9 @@ export async function POST(request: NextRequest) {
       })),
       workloadWarning,
       clientHealthAlerts: clientHealthAlerts.length > 0 ? clientHealthAlerts : null,
+      bufferWarning,
+      capacityPercent,
+      approvedPlan: approvedPlan ? approvedPlan.plan : null,
     });
 
     const anthropic = getAnthropicClient();
@@ -220,6 +252,8 @@ Format:
 - Any overdue items needing immediate attention
 - If workloadWarning is provided, include a workload rebalancing suggestion naturally
 - If clientHealthAlerts are provided, flag unhealthy client projects with a brief recommendation
+- If bufferWarning is provided, warn about capacity overflow and suggest deferring something
+- If approvedPlan is provided, reference today's planned tasks from the weekly plan
 - One proactive suggestion or question for the team
 Keep it under 1500 characters.`,
       messages: [{ role: "user", content: briefData }],
