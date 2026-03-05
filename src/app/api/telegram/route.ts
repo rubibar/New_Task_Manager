@@ -6,7 +6,8 @@ import { recalculateAndPersistScores } from "@/lib/scoring";
 import { SYSTEM_PROMPT } from "@/lib/bot-brain";
 import { Prisma } from "@prisma/client";
 import type { Priority, TaskType, ProjectStatus } from "@prisma/client";
-import { endOfWeek } from "date-fns";
+import { endOfWeek, startOfWeek, startOfDay, endOfDay, addDays } from "date-fns";
+import { google } from "googleapis";
 
 const BOT_USERNAME = "@ReplicaStudioBot";
 
@@ -222,9 +223,13 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
+    // Fetch today's calendar events (non-blocking — ok if it fails)
+    const todayCalendarEvents = await getCalendarEvents("today").catch(() => null);
+
     const contextBlock = JSON.stringify({
       currentDate: new Date().toISOString().split("T")[0],
       sender: message.from?.first_name,
+      todayCalendarEvents: todayCalendarEvents ?? "No calendar data available",
       teamMembers: users.map((u) => ({ id: u.id, name: u.name, email: u.email })),
       projects: projects.map((p) => ({
         id: p.id,
@@ -297,7 +302,7 @@ export async function POST(request: NextRequest) {
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1500,
+      max_tokens: 2000,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
     });
@@ -401,6 +406,12 @@ export async function POST(request: NextRequest) {
       case "approve_weekly_plan":
         if (td) await handleApproveWeeklyPlan(chatIdStr, message.from?.first_name);
         break;
+      case "extract_tasks_from_text":
+        if (td) await handleExtractTasks(td, users, chatIdStr, message.from?.first_name);
+        break;
+      case "check_calendar":
+        // Calendar data is already included in the reply by Claude
+        break;
     }
 
     // Send reply
@@ -501,6 +512,123 @@ async function handleApproveWeeklyPlan(chatId: string, approvedBy?: string) {
     data: { approved: true, approvedBy: approvedBy ?? "Unknown" },
   });
   console.log("[Telegram Bot] Weekly plan approved by", approvedBy);
+}
+
+// ==================== COMMUNICATION HANDLERS ====================
+
+async function handleExtractTasks(
+  taskData: Record<string, unknown>,
+  users: { id: string; name: string; email: string }[],
+  chatId: string,
+  senderName?: string
+) {
+  const extractedTasks = taskData.tasks as Array<Record<string, unknown>> | undefined;
+  const decisions = taskData.decisions as Array<Record<string, unknown>> | undefined;
+
+  let createdCount = 0;
+
+  if (extractedTasks?.length) {
+    for (const t of extractedTasks) {
+      try {
+        await handleAddTask(t, users);
+        createdCount++;
+      } catch {
+        console.log("[Telegram Bot] extract_tasks: failed to create", t.title);
+      }
+    }
+  }
+
+  if (decisions?.length) {
+    for (const d of decisions) {
+      await prisma.decision.create({
+        data: {
+          summary: d.summary as string,
+          madeBy: (d.madeBy as string) ?? senderName ?? "Unknown",
+          chatId,
+        },
+      }).catch(() => {});
+    }
+  }
+
+  console.log("[Telegram Bot] Extracted:", createdCount, "tasks,", decisions?.length ?? 0, "decisions");
+}
+
+// ==================== CALENDAR HELPERS ====================
+
+async function getCalendarEvents(period: "today" | "week" | "tomorrow"): Promise<string | null> {
+  try {
+    // Use first user with tokens for calendar access
+    const user = await prisma.user.findFirst({
+      where: { accessToken: { not: null } },
+      select: { id: true, accessToken: true, refreshToken: true, tokenExpiry: true },
+    });
+
+    if (!user?.accessToken) return null;
+
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+      access_token: user.accessToken,
+      refresh_token: user.refreshToken,
+    });
+
+    if (user.tokenExpiry && new Date() > user.tokenExpiry && user.refreshToken) {
+      try {
+        const { credentials } = await oauth2Client.refreshAccessToken();
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            accessToken: credentials.access_token,
+            refreshToken: credentials.refresh_token || user.refreshToken,
+            tokenExpiry: credentials.expiry_date ? new Date(credentials.expiry_date) : null,
+          },
+        });
+        oauth2Client.setCredentials(credentials);
+      } catch {
+        return null;
+      }
+    }
+
+    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+    const now = new Date();
+    let timeMin: Date;
+    let timeMax: Date;
+
+    if (period === "today") {
+      timeMin = startOfDay(now);
+      timeMax = endOfDay(now);
+    } else if (period === "tomorrow") {
+      timeMin = startOfDay(addDays(now, 1));
+      timeMax = endOfDay(addDays(now, 1));
+    } else {
+      timeMin = startOfWeek(now, { weekStartsOn: 0 });
+      timeMax = endOfWeek(now, { weekStartsOn: 0 });
+    }
+
+    const response = await calendar.events.list({
+      calendarId: "primary",
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 20,
+    });
+
+    const events = response.data.items || [];
+    if (events.length === 0) return null;
+
+    return events.map((e) => {
+      const start = e.start?.dateTime
+        ? new Date(e.start.dateTime).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
+        : "All day";
+      return `${start} — ${e.summary ?? "No title"}`;
+    }).join("\n");
+  } catch (error) {
+    console.error("[Telegram Bot] Calendar fetch failed:", error);
+    return null;
+  }
 }
 
 // ==================== TASK HANDLERS ====================

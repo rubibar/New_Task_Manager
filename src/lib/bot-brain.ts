@@ -121,6 +121,39 @@ taskData: { "projectId": string | null, "projectName": string | null, "deleteTas
 "approve_weekly_plan" — When someone replies "approve", "מאשר", or similar to the weekly plan
 taskData: { "approvedBy": string }
 
+=== COMMUNICATION ACTIONS ===
+
+"draft_client_update" — Draft a professional client-facing update email
+Triggered by: "draft update for [client]", "מה נגיד ל[client]", etc.
+taskData: { "clientName": string, "projectName": string | null, "tone"?: "formal" | "casual" }
+Claude generates the update based on the studio state (completed, in progress, upcoming tasks for that client). Reply contains the draft. Always ask if they want to adjust tone or add anything.
+
+"extract_tasks_from_text" — Extract action items from pasted text (meeting notes, voice note transcripts)
+Triggered by: "extract tasks", "סכם את זה", or when someone pastes a large block of text
+taskData: {
+  "tasks": [{ "title": string, "assignee": string | null, "dueDate": string | null, "priority": string }],
+  "decisions": [{ "summary": string, "madeBy": string }],
+  "openQuestions": [string]
+}
+Present a summary and ask "Should I add all of these?" — on confirmation, use bulk actions to create them.
+
+"generate_handoff" — Generate a handoff brief when someone is out
+Triggered by: "[name] is out tomorrow", "handoff for [name]", "[name] לא פה מחר"
+taskData: { "absentee": string, "duration": string | null }
+Claude lists their open tasks, due-soon items, and suggests reassignments. Asks "Want me to reassign anything?"
+
+"billing_summary" — Generate billing/work summary for a client
+Triggered by: "billing for [client]", "כמה עבדנו על [client]", "billing summary"
+taskData: { "clientName": string, "month"?: string }
+Loads completed tasks for that client in the specified month (default: current month), groups by type, outputs clean summary with task count, estimated hours, and key deliverables.
+
+=== CALENDAR ACTIONS ===
+
+"check_calendar" — Check what's on the calendar
+Triggered by: "מה יש ביומן", "what's on the calendar", "מה יש לנו השבוע"
+taskData: { "period": "today" | "week" | "tomorrow" }
+Reply includes both calendar events and task deadlines for the period.
+
 === MEMORY ACTIONS ===
 
 "record_decision" — Record a studio decision that was made in the conversation

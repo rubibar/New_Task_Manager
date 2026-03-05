@@ -35,6 +35,14 @@
     {
       "path": "/api/cron/stale-tasks",
       "schedule": "0 8 * * 0-4"
+    },
+    {
+      "path": "/api/cron/monthly-report",
+      "schedule": "0 8 1 * *"
+    },
+    {
+      "path": "/api/cron/personal-review",
+      "schedule": "0 15 * * 3"
     }
   ]
 }

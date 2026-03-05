@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { sendMessage } from "@/lib/telegram";
 import { subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from "date-fns";
+import { google } from "googleapis";
 
 const CHAT_ID = Number(process.env.TELEGRAM_GROUP_CHAT_ID);
 
@@ -196,9 +197,62 @@ export async function POST(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
+    // --- CALENDAR EVENTS ---
+    let todayEvents: string[] = [];
+    try {
+      const calUser = await prisma.user.findFirst({
+        where: { accessToken: { not: null } },
+        select: { id: true, accessToken: true, refreshToken: true, tokenExpiry: true },
+      });
+
+      if (calUser?.accessToken) {
+        const oauth2Client = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET
+        );
+        oauth2Client.setCredentials({
+          access_token: calUser.accessToken,
+          refresh_token: calUser.refreshToken,
+        });
+
+        if (calUser.tokenExpiry && now > calUser.tokenExpiry && calUser.refreshToken) {
+          const { credentials } = await oauth2Client.refreshAccessToken();
+          await prisma.user.update({
+            where: { id: calUser.id },
+            data: {
+              accessToken: credentials.access_token,
+              refreshToken: credentials.refresh_token || calUser.refreshToken,
+              tokenExpiry: credentials.expiry_date ? new Date(credentials.expiry_date) : null,
+            },
+          });
+          oauth2Client.setCredentials(credentials);
+        }
+
+        const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+        const response = await calendar.events.list({
+          calendarId: "primary",
+          timeMin: startOfDay(now).toISOString(),
+          timeMax: endOfDay(now).toISOString(),
+          singleEvents: true,
+          orderBy: "startTime",
+          maxResults: 10,
+        });
+
+        todayEvents = (response.data.items || []).map((e) => {
+          const start = e.start?.dateTime
+            ? new Date(e.start.dateTime).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })
+            : "All day";
+          return `${start} — ${e.summary ?? "No title"}`;
+        });
+      }
+    } catch {
+      // Calendar fetch is non-critical
+    }
+
     const briefData = JSON.stringify({
       date: now.toISOString().split("T")[0],
       teamMembers: users.map((u) => u.name),
+      todayCalendarEvents: todayEvents.length > 0 ? todayEvents : null,
       completedYesterday: completedYesterday.map((t) => ({
         title: t.title,
         owner: t.owner?.name,
@@ -248,6 +302,7 @@ Team: Rubi Barazani, Gilad Rozenkoff, Dana. Work week: Sun-Thu.
 You are Replica, the studio's AI manager. Be warm, sharp, and concise. Max 2 emojis.
 Format:
 - One-line summary of the day ahead
+- If todayCalendarEvents are provided, list meetings/events first under a "פגישות היום" mini-section
 - Each person's top 2-3 priorities for today (bullet points)
 - Any overdue items needing immediate attention
 - If workloadWarning is provided, include a workload rebalancing suggestion naturally
