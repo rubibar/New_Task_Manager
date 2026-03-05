@@ -5,7 +5,7 @@ import { sendMessage } from "@/lib/telegram";
 import { recalculateAndPersistScores } from "@/lib/scoring";
 import { SYSTEM_PROMPT } from "@/lib/bot-brain";
 import { Prisma } from "@prisma/client";
-import type { Priority, TaskType, ProjectStatus } from "@prisma/client";
+import type { Priority, TaskType, ProjectStatus, ClientStatus, ClientType, ClientSource } from "@prisma/client";
 import { endOfWeek, startOfWeek, startOfDay, endOfDay, addDays } from "date-fns";
 import { google } from "googleapis";
 
@@ -44,6 +44,29 @@ const ASSIGNEE_MAP: Record<string, string> = {
   rubi: "rubi@replica.works",
   gilad: "gilad@replica.works",
   dana: "dana@replica.works",
+};
+
+const CLIENT_STATUS_MAP: Record<string, ClientStatus> = {
+  active: "ACTIVE",
+  inactive: "INACTIVE",
+  prospective: "PROSPECTIVE",
+  archived: "ARCHIVED",
+};
+
+const CLIENT_TYPE_MAP: Record<string, ClientType> = {
+  agency: "AGENCY",
+  direct_client: "DIRECT_CLIENT",
+  internal: "INTERNAL",
+  freelance_partner: "FREELANCE_PARTNER",
+  other: "OTHER",
+};
+
+const CLIENT_SOURCE_MAP: Record<string, ClientSource> = {
+  referral: "REFERRAL",
+  inbound: "INBOUND",
+  cold_outreach: "COLD_OUTREACH",
+  repeat: "REPEAT",
+  other: "OTHER",
 };
 
 interface TelegramUpdate {
@@ -195,7 +218,14 @@ export async function POST(request: NextRequest) {
       }),
       prisma.user.findMany({ select: { id: true, name: true, email: true } }),
       prisma.client.findMany({
-        select: { id: true, name: true, status: true, _count: { select: { projects: true } } },
+        select: {
+          id: true, name: true, status: true, clientType: true, source: true,
+          industry: true, website: true, phone: true, email: true, notes: true,
+          tags: true,
+          _count: { select: { projects: true, invoices: true, contacts: true } },
+          projects: { select: { id: true, name: true, status: true }, take: 10 },
+          contacts: { select: { name: true, role: true, email: true, phone: true, isPrimary: true }, take: 5 },
+        },
         orderBy: { updatedAt: "desc" },
         take: 20,
       }),
@@ -262,7 +292,19 @@ export async function POST(request: NextRequest) {
         id: c.id,
         name: c.name,
         status: c.status,
+        clientType: c.clientType,
+        source: c.source,
+        industry: c.industry,
+        website: c.website,
+        phone: c.phone,
+        email: c.email,
+        notes: c.notes,
+        tags: c.tags,
         projectCount: c._count.projects,
+        invoiceCount: c._count.invoices,
+        contactCount: c._count.contacts,
+        projects: c.projects.map((p) => ({ id: p.id, name: p.name, status: p.status })),
+        contacts: c.contacts.map((ct) => ({ name: ct.name, role: ct.role, email: ct.email, phone: ct.phone, isPrimary: ct.isPrimary })),
       })),
       deliverables: deliverables.map((d) => ({
         id: d.id,
@@ -411,6 +453,18 @@ export async function POST(request: NextRequest) {
         break;
       case "check_calendar":
         // Calendar data is already included in the reply by Claude
+        break;
+      case "create_client":
+        if (td) await handleCreateClient(td);
+        break;
+      case "update_client":
+        if (td) await handleUpdateClient(td);
+        break;
+      case "delete_client":
+        if (td) await handleDeleteClient(td);
+        break;
+      case "link_project_to_client":
+        if (td) await handleLinkProjectToClient(td);
         break;
     }
 
@@ -1022,6 +1076,163 @@ async function handleDeleteProject(taskData: Record<string, unknown>) {
   await prisma.project.delete({ where: { id: project.id } });
   console.log("[Telegram Bot] Deleted project:", project.id, project.name);
   recalculateAndPersistScores();
+}
+
+// ==================== CRM HANDLERS ====================
+
+async function findClientByIdOrName(
+  clientId: string | null | undefined,
+  clientName: string | null | undefined
+) {
+  if (clientId) {
+    const c = await prisma.client.findUnique({ where: { id: clientId } });
+    if (c) return c;
+  }
+  if (clientName) {
+    return prisma.client.findFirst({
+      where: { name: { equals: clientName, mode: "insensitive" } },
+    });
+  }
+  return null;
+}
+
+async function handleCreateClient(taskData: Record<string, unknown>) {
+  const name = taskData.name as string;
+  if (!name) {
+    console.log("[Telegram Bot] create_client: no name provided");
+    return;
+  }
+
+  const statusKey = (taskData.status as string)?.toLowerCase();
+  const typeKey = (taskData.clientType as string)?.toLowerCase().replace(/\s+/g, "_");
+  const sourceKey = (taskData.source as string)?.toLowerCase().replace(/\s+/g, "_");
+
+  const client = await prisma.client.create({
+    data: {
+      name,
+      email: (taskData.email as string) ?? undefined,
+      phone: (taskData.phone as string) ?? undefined,
+      website: (taskData.website as string) ?? undefined,
+      industry: (taskData.industry as string) ?? undefined,
+      address: (taskData.address as string) ?? undefined,
+      notes: (taskData.notes as string) ?? undefined,
+      status: statusKey ? CLIENT_STATUS_MAP[statusKey] ?? "ACTIVE" : "ACTIVE",
+      clientType: typeKey ? CLIENT_TYPE_MAP[typeKey] ?? "DIRECT_CLIENT" : "DIRECT_CLIENT",
+      source: sourceKey ? CLIENT_SOURCE_MAP[sourceKey] ?? "OTHER" : "OTHER",
+      tags: (taskData.tags as string[]) ?? [],
+    },
+  });
+  console.log("[Telegram Bot] Created client:", client.id, client.name, "status:", client.status, "type:", client.clientType);
+
+  // Create primary contact if provided
+  if (taskData.contactName) {
+    const contact = await prisma.clientContact.create({
+      data: {
+        clientId: client.id,
+        name: taskData.contactName as string,
+        role: (taskData.contactRole as string) ?? undefined,
+        email: (taskData.contactEmail as string) ?? undefined,
+        phone: (taskData.contactPhone as string) ?? undefined,
+        isPrimary: true,
+      },
+    });
+    console.log("[Telegram Bot] Created primary contact:", contact.id, contact.name, "for client:", client.name);
+  }
+}
+
+async function handleUpdateClient(taskData: Record<string, unknown>) {
+  const client = await findClientByIdOrName(
+    taskData.clientId as string | undefined,
+    taskData.clientName as string | undefined
+  );
+  if (!client) {
+    console.log("[Telegram Bot] update_client: not found", taskData.clientId, taskData.clientName);
+    return;
+  }
+
+  const updates = taskData.updates as Record<string, unknown> | undefined;
+  if (!updates) {
+    console.log("[Telegram Bot] update_client: no updates provided");
+    return;
+  }
+
+  const data: Record<string, unknown> = {};
+  if (updates.name) data.name = updates.name;
+  if (updates.email !== undefined) data.email = updates.email;
+  if (updates.phone !== undefined) data.phone = updates.phone;
+  if (updates.website !== undefined) data.website = updates.website;
+  if (updates.industry !== undefined) data.industry = updates.industry;
+  if (updates.address !== undefined) data.address = updates.address;
+  if (updates.notes !== undefined) data.notes = updates.notes;
+  if (updates.tags) data.tags = updates.tags;
+  if (updates.status) {
+    const key = (updates.status as string).toLowerCase();
+    data.status = CLIENT_STATUS_MAP[key] ?? updates.status;
+  }
+  if (updates.clientType) {
+    const key = (updates.clientType as string).toLowerCase().replace(/\s+/g, "_");
+    data.clientType = CLIENT_TYPE_MAP[key] ?? updates.clientType;
+  }
+  if (updates.source) {
+    const key = (updates.source as string).toLowerCase().replace(/\s+/g, "_");
+    data.source = CLIENT_SOURCE_MAP[key] ?? updates.source;
+  }
+
+  if (Object.keys(data).length === 0) {
+    console.log("[Telegram Bot] update_client: no valid fields to update");
+    return;
+  }
+
+  console.log("[Telegram Bot] Updating client", client.id, client.name, JSON.stringify(data));
+  await prisma.client.update({ where: { id: client.id }, data });
+  console.log("[Telegram Bot] Client updated successfully:", client.id);
+}
+
+async function handleDeleteClient(taskData: Record<string, unknown>) {
+  const client = await findClientByIdOrName(
+    taskData.clientId as string | undefined,
+    taskData.clientName as string | undefined
+  );
+  if (!client) {
+    console.log("[Telegram Bot] delete_client: not found", taskData.clientId, taskData.clientName);
+    return;
+  }
+
+  // Unlink projects (don't delete them)
+  const unlinked = await prisma.project.updateMany({
+    where: { clientId: client.id },
+    data: { clientId: null, clientName: null },
+  });
+  console.log("[Telegram Bot] Unlinked", unlinked.count, "projects from client:", client.name);
+
+  await prisma.client.delete({ where: { id: client.id } });
+  console.log("[Telegram Bot] Deleted client:", client.id, client.name);
+}
+
+async function handleLinkProjectToClient(taskData: Record<string, unknown>) {
+  const client = await findClientByIdOrName(
+    taskData.clientId as string | undefined,
+    taskData.clientName as string | undefined
+  );
+  if (!client) {
+    console.log("[Telegram Bot] link_project_to_client: client not found", taskData.clientId, taskData.clientName);
+    return;
+  }
+
+  const project = await findProjectByIdOrName(
+    taskData.projectId as string | undefined,
+    taskData.projectName as string | undefined
+  );
+  if (!project) {
+    console.log("[Telegram Bot] link_project_to_client: project not found", taskData.projectId, taskData.projectName);
+    return;
+  }
+
+  await prisma.project.update({
+    where: { id: project.id },
+    data: { clientId: client.id, clientName: client.name },
+  });
+  console.log("[Telegram Bot] Linked project", project.id, project.name, "to client", client.id, client.name);
 }
 
 // ==================== CONFLICT DETECTION ====================

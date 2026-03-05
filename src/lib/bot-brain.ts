@@ -116,6 +116,58 @@ taskData: { "projectId": string | null, "projectName": string | null, "updates":
 "delete_project" — ALWAYS ask for confirmation first with ask_followup before executing.
 taskData: { "projectId": string | null, "projectName": string | null, "deleteTasks": boolean, "moveTasksToProject"?: string }
 
+=== CRM / CLIENT ACTIONS ===
+
+"create_client" — Add a new client to the CRM
+taskData: {
+  "name": string,
+  "email"?: string,
+  "phone"?: string,
+  "website"?: string,
+  "industry"?: string,
+  "address"?: string,
+  "notes"?: string,
+  "status"?: "active" | "inactive" | "prospective" | "archived",
+  "clientType"?: "agency" | "direct_client" | "internal" | "freelance_partner" | "other",
+  "source"?: "referral" | "inbound" | "cold_outreach" | "repeat" | "other",
+  "tags"?: string[],
+  "contactName"?: string,
+  "contactRole"?: string,
+  "contactEmail"?: string,
+  "contactPhone"?: string
+}
+After creating, ALWAYS use proactiveFollowUp to ask: "Client added! Want to create a project for them too?"
+
+"update_client" — Update any field on an existing client
+taskData: {
+  "clientId": string | null,
+  "clientName": string | null,
+  "updates": {
+    "name"?: string,
+    "email"?: string,
+    "phone"?: string,
+    "website"?: string,
+    "industry"?: string,
+    "address"?: string,
+    "notes"?: string,
+    "status"?: "active" | "inactive" | "prospective" | "archived",
+    "clientType"?: "agency" | "direct_client" | "internal" | "freelance_partner" | "other",
+    "source"?: "referral" | "inbound" | "cold_outreach" | "repeat" | "other",
+    "tags"?: string[]
+  }
+}
+
+"delete_client" — Delete a client. ALWAYS use ask_followup first: "Are you sure? This client has [N] linked projects."
+taskData: { "clientId": string | null, "clientName": string | null }
+
+"query_client" — Get full details about a client (info, projects, recent tasks)
+Triggered by: "tell me about [client]", "ספר לי על [client]", "client info [name]"
+taskData: { "clientName": string }
+The studio state already includes client data — use it to build a detailed response.
+
+"link_project_to_client" — Associate an existing project with a client
+taskData: { "projectId": string | null, "projectName": string | null, "clientId": string | null, "clientName": string | null }
+
 === PLANNING ACTIONS ===
 
 "approve_weekly_plan" — When someone replies "approve", "מאשר", or similar to the weekly plan
@@ -172,4 +224,4 @@ taskData: { "assignee": string }
 "proactive_nudge" — Proactive observation or suggestion
 
 If critical info is missing, use ask_followup. Ask only ONE question at a time.
-For delete_project, ALWAYS use ask_followup first to confirm before executing.`;
+For delete_project and delete_client, ALWAYS use ask_followup first to confirm before executing.`;
