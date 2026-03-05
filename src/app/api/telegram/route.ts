@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { sendMessage } from "@/lib/telegram";
 import { recalculateAndPersistScores } from "@/lib/scoring";
+import { Prisma } from "@prisma/client";
 import type { Priority, TaskType } from "@prisma/client";
 
 const BOT_USERNAME = "@ReplicaStudioBot";
@@ -209,7 +210,9 @@ export async function POST(request: NextRequest) {
         await prisma.botConversation.update({
           where: { id: pendingConvo.id },
           data: {
-            partialTask: botResponse.taskData ?? pendingConvo.partialTask,
+            partialTask: botResponse.taskData
+              ? (botResponse.taskData as Prisma.InputJsonValue)
+              : pendingConvo.partialTask as Prisma.InputJsonValue,
             pendingAction: botResponse.taskData
               ? String((botResponse.taskData as Record<string, unknown>).originalAction ?? pendingConvo.pendingAction)
               : pendingConvo.pendingAction,
@@ -221,7 +224,9 @@ export async function POST(request: NextRequest) {
           data: {
             chatId: chatIdStr,
             pendingAction: "add_task",
-            partialTask: botResponse.taskData ?? null,
+            partialTask: botResponse.taskData
+              ? (botResponse.taskData as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
             expiresAt,
           },
         });
