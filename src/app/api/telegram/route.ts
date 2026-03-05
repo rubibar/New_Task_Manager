@@ -3,50 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { sendMessage } from "@/lib/telegram";
 import { recalculateAndPersistScores } from "@/lib/scoring";
+import { SYSTEM_PROMPT } from "@/lib/bot-brain";
 import { Prisma } from "@prisma/client";
 import type { Priority, TaskType } from "@prisma/client";
+import { endOfWeek } from "date-fns";
 
 const BOT_USERNAME = "@ReplicaStudioBot";
-
-const SYSTEM_PROMPT = `You are Replica Bot, the AI operations assistant for Replica Studio (a 3-person animation studio in Tel Aviv).
-Team members: Rubi Barazani, Gilad Rozenkoff, Dana.
-
-You receive Telegram messages from the team group chat.
-Always respond in the same language they write in (Hebrew or English).
-Be concise, warm, and direct — like a smart colleague, not a corporate bot.
-Do not use excessive emojis. Max 2 per message.
-
-Respond ONLY with valid JSON in this shape:
-{
-  "action": "add_task" | "update_task" | "delete_task" | "query" | "reply" | "ask_followup",
-  "reply": "the message to send back to the group",
-  "taskData": { ... }
-}
-
-taskData shape for add_task:
-{
-  "title": string,
-  "projectName": string | null,
-  "assignee": string | null,
-  "dueDate": string | null,
-  "priority": "urgent_important" | "important" | "urgent" | "low",
-  "type": "client" | "rd" | "admin",
-  "status": "todo"
-}
-
-taskData shape for update_task:
-{
-  "taskId": string,
-  "updates": { "status"?: string, "priority"?: string, "assignee"?: string }
-}
-
-taskData shape for delete_task:
-{
-  "taskId": string
-}
-
-If critical info is missing (especially project), action = ask_followup.
-Ask only ONE question at a time.`;
 
 const PRIORITY_MAP: Record<string, Priority> = {
   urgent_important: "URGENT_IMPORTANT",
@@ -82,9 +44,10 @@ interface TelegramUpdate {
 }
 
 interface BotResponse {
-  action: "add_task" | "update_task" | "delete_task" | "query" | "reply" | "ask_followup";
+  action: "add_task" | "update_task" | "delete_task" | "query" | "reply" | "ask_followup" | "proactive_nudge";
   reply: string;
   taskData?: Record<string, unknown>;
+  proactiveFollowUp?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -239,8 +202,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Execute DB actions
+    let addedTaskOwnerId: string | null = null;
     if (botResponse.action === "add_task" && botResponse.taskData) {
-      await handleAddTask(botResponse.taskData, users);
+      addedTaskOwnerId = await handleAddTask(botResponse.taskData, users);
     } else if (botResponse.action === "update_task" && botResponse.taskData) {
       await handleUpdateTask(botResponse.taskData);
     } else if (botResponse.action === "delete_task" && botResponse.taskData) {
@@ -250,6 +214,16 @@ export async function POST(request: NextRequest) {
     // Send reply
     if (botResponse.reply) {
       await sendMessage(message.chat.id, botResponse.reply, message.message_id);
+    }
+
+    // Send proactive follow-up if Claude included one
+    if (botResponse.proactiveFollowUp) {
+      await sendMessage(message.chat.id, botResponse.proactiveFollowUp);
+    }
+
+    // Conflict detection: after adding a task, check assignee overload
+    if (addedTaskOwnerId) {
+      await checkAssigneeConflicts(message.chat.id, addedTaskOwnerId);
     }
 
     return NextResponse.json({ ok: true });
@@ -263,7 +237,7 @@ export async function POST(request: NextRequest) {
 async function handleAddTask(
   taskData: Record<string, unknown>,
   users: { id: string; name: string; email: string }[]
-) {
+): Promise<string | null> {
   // Resolve project by name (case-insensitive)
   let projectId: string | null = null;
   if (taskData.projectName) {
@@ -315,6 +289,7 @@ async function handleAddTask(
   });
 
   recalculateAndPersistScores();
+  return ownerId;
 }
 
 async function handleUpdateTask(taskData: Record<string, unknown>) {
@@ -338,4 +313,31 @@ async function handleDeleteTask(taskData: Record<string, unknown>) {
   if (!taskId) return;
 
   await prisma.task.delete({ where: { id: taskId } });
+}
+
+async function checkAssigneeConflicts(chatId: number, ownerId: string) {
+  try {
+    const now = new Date();
+    const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
+
+    const urgentThisWeek = await prisma.task.findMany({
+      where: {
+        ownerId,
+        status: { in: ["TODO", "IN_PROGRESS"] },
+        priority: { in: ["URGENT_IMPORTANT", "URGENT_NOT_IMPORTANT"] },
+        deadline: { lte: weekEnd },
+      },
+      include: { owner: { select: { name: true } } },
+    });
+
+    if (urgentThisWeek.length >= 2) {
+      const ownerName = urgentThisWeek[0].owner?.name ?? "This person";
+      await sendMessage(
+        chatId,
+        `*${ownerName}* now has ${urgentThisWeek.length} urgent tasks due this week. Want me to suggest a priority order?`
+      );
+    }
+  } catch {
+    // Non-critical — don't block the main flow
+  }
 }

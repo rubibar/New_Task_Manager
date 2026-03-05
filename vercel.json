@@ -27,6 +27,14 @@
     {
       "path": "/api/cron/weekly-wrap",
       "schedule": "0 15 * * 3"
+    },
+    {
+      "path": "/api/cron/daily-brief",
+      "schedule": "30 4 * * 0-4"
+    },
+    {
+      "path": "/api/cron/stale-tasks",
+      "schedule": "0 8 * * 0-4"
     }
   ]
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { sendMessage } from "@/lib/telegram";
+import { analyzePatterns } from "@/lib/patterns";
 import { startOfWeek } from "date-fns";
 
 const CHAT_ID = Number(process.env.TELEGRAM_GROUP_CHAT_ID);
@@ -42,6 +43,9 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
+    // Analyze 4-week patterns
+    const patterns = await analyzePatterns();
+
     const summary = JSON.stringify({
       completed: completedThisWeek.map((t) => ({
         title: t.title,
@@ -57,6 +61,7 @@ export async function POST(request: NextRequest) {
         deadline: t.deadline?.toISOString().split("T")[0] ?? null,
         emergency: t.emergency,
       })),
+      patternInsights: patterns.summary,
     });
 
     const anthropic = getAnthropicClient();
@@ -74,8 +79,9 @@ Be warm, concise, direct. Max 2 emojis total.
 Format:
 - Quick recap: how many tasks completed this week, by who
 - Highlight anything still open that's urgent or overdue
+- If pattern insights are provided, weave ONE trend naturally into the message (e.g. "I notice Rubi's admin tasks keep slipping to Wednesday...")
 - One short nudge or encouragement for the team heading into planning
-Keep it under 1000 characters.`,
+Keep it under 1200 characters.`,
       messages: [
         {
           role: "user",
