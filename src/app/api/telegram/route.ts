@@ -44,7 +44,7 @@ interface TelegramUpdate {
 }
 
 interface BotResponse {
-  action: "add_task" | "update_task" | "delete_task" | "query" | "reply" | "ask_followup" | "proactive_nudge";
+  action: "add_task" | "update_task" | "delete_task" | "consolidate_tasks" | "query" | "reply" | "ask_followup" | "proactive_nudge";
   reply: string;
   taskData?: Record<string, unknown>;
   proactiveFollowUp?: string;
@@ -161,9 +161,12 @@ export async function POST(request: NextRequest) {
     try {
       botResponse = JSON.parse(raw);
     } catch {
+      console.log("[Telegram Bot] Claude returned non-JSON:", raw.slice(0, 500));
       await sendMessage(message.chat.id, raw, message.message_id);
       return NextResponse.json({ ok: true });
     }
+
+    console.log("[Telegram Bot] Action:", botResponse.action, "TaskData:", JSON.stringify(botResponse.taskData ?? null));
 
     // Manage conversation state
     if (botResponse.action === "ask_followup") {
@@ -206,9 +209,11 @@ export async function POST(request: NextRequest) {
     if (botResponse.action === "add_task" && botResponse.taskData) {
       addedTaskOwnerId = await handleAddTask(botResponse.taskData, users);
     } else if (botResponse.action === "update_task" && botResponse.taskData) {
-      await handleUpdateTask(botResponse.taskData);
+      await handleUpdateTask(botResponse.taskData, users);
     } else if (botResponse.action === "delete_task" && botResponse.taskData) {
       await handleDeleteTask(botResponse.taskData);
+    } else if (botResponse.action === "consolidate_tasks" && botResponse.taskData) {
+      await handleConsolidateTasks(botResponse.taskData, users);
     }
 
     // Send reply
@@ -292,10 +297,37 @@ async function handleAddTask(
   return ownerId;
 }
 
-async function handleUpdateTask(taskData: Record<string, unknown>) {
-  const taskId = taskData.taskId as string;
+async function findTaskByIdOrTitle(taskData: Record<string, unknown>) {
+  // Try by ID first
+  if (taskData.taskId) {
+    const task = await prisma.task.findUnique({
+      where: { id: taskData.taskId as string },
+    });
+    if (task) return task;
+  }
+  // Fallback to title search
+  const title = (taskData.title as string) ?? (taskData.taskId as string);
+  if (!title) return null;
+  return prisma.task.findFirst({
+    where: { title: { equals: title, mode: "insensitive" } },
+  });
+}
+
+async function handleUpdateTask(
+  taskData: Record<string, unknown>,
+  users: { id: string; name: string; email: string }[]
+) {
+  const task = await findTaskByIdOrTitle(taskData);
+  if (!task) {
+    console.log("[Telegram Bot] update_task: task not found", taskData.taskId, taskData.title);
+    return;
+  }
+
   const updates = taskData.updates as Record<string, unknown> | undefined;
-  if (!taskId || !updates) return;
+  if (!updates) {
+    console.log("[Telegram Bot] update_task: no updates provided");
+    return;
+  }
 
   const data: Record<string, unknown> = {};
   if (updates.status) data.status = updates.status;
@@ -303,16 +335,74 @@ async function handleUpdateTask(taskData: Record<string, unknown>) {
     const key = (updates.priority as string).toLowerCase();
     data.priority = PRIORITY_MAP[key] ?? updates.priority;
   }
+  if (updates.title) data.title = updates.title;
+  if (updates.dueDate) data.deadline = new Date(updates.dueDate as string);
+  if (updates.assignee) {
+    const assigneeLower = (updates.assignee as string).toLowerCase();
+    const email = ASSIGNEE_MAP[assigneeLower];
+    const user = email
+      ? users.find((u) => u.email === email)
+      : users.find((u) => u.name?.toLowerCase().includes(assigneeLower));
+    if (user) data.ownerId = user.id;
+  }
 
-  await prisma.task.update({ where: { id: taskId }, data });
+  if (Object.keys(data).length === 0) {
+    console.log("[Telegram Bot] update_task: no valid fields to update");
+    return;
+  }
+
+  console.log("[Telegram Bot] Updating task", task.id, "with", JSON.stringify(data));
+  await prisma.task.update({ where: { id: task.id }, data });
   recalculateAndPersistScores();
 }
 
 async function handleDeleteTask(taskData: Record<string, unknown>) {
-  const taskId = taskData.taskId as string;
-  if (!taskId) return;
+  const task = await findTaskByIdOrTitle(taskData);
+  if (!task) {
+    console.log("[Telegram Bot] delete_task: task not found", taskData.taskId, taskData.title);
+    return;
+  }
 
-  await prisma.task.delete({ where: { id: taskId } });
+  console.log("[Telegram Bot] Deleting task", task.id, task.title);
+  await prisma.task.delete({ where: { id: task.id } });
+  recalculateAndPersistScores();
+}
+
+async function handleConsolidateTasks(
+  taskData: Record<string, unknown>,
+  users: { id: string; name: string; email: string }[]
+) {
+  const titlesToDelete = taskData.tasksToDelete as string[] | undefined;
+  const newTaskData = taskData.newTask as Record<string, unknown> | undefined;
+
+  if (!titlesToDelete?.length) {
+    console.log("[Telegram Bot] consolidate_tasks: no tasksToDelete provided");
+    return;
+  }
+
+  // Delete tasks by title
+  let deletedCount = 0;
+  for (const title of titlesToDelete) {
+    const task = await prisma.task.findFirst({
+      where: { title: { equals: title, mode: "insensitive" } },
+    });
+    if (task) {
+      await prisma.task.delete({ where: { id: task.id } });
+      deletedCount++;
+      console.log("[Telegram Bot] Consolidated: deleted", task.id, task.title);
+    } else {
+      console.log("[Telegram Bot] Consolidated: task not found for title:", title);
+    }
+  }
+
+  // Create the new consolidated task if provided
+  if (newTaskData) {
+    await handleAddTask(newTaskData, users);
+    console.log("[Telegram Bot] Consolidated: created new task", newTaskData.title);
+  }
+
+  console.log("[Telegram Bot] Consolidation done: deleted", deletedCount, "of", titlesToDelete.length);
+  recalculateAndPersistScores();
 }
 
 async function checkAssigneeConflicts(chatId: number, ownerId: string) {
