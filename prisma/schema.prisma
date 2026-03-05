@@ -482,6 +482,30 @@ model BotConversation {
   @@index([chatId])
 }
 
+model WorkloadLog {
+  id           String   @id @default(cuid())
+  userId       String
+  userName     String
+  taskCount    Int
+  weightedLoad Float
+  percentage   Float
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model VelocityLog {
+  id            String   @id @default(cuid())
+  taskId        String
+  taskTitle     String
+  estimatedDays Int?
+  actualDays    Int?
+  assignee      String
+  completedAt   DateTime @default(now())
+
+  @@index([assignee, completedAt])
+}
+
 model TaskDependency {
   id          String   @id @default(cuid())
   taskId      String

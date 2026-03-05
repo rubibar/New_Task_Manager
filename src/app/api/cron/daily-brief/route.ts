@@ -6,6 +6,13 @@ import { subDays, startOfDay, endOfDay } from "date-fns";
 
 const CHAT_ID = Number(process.env.TELEGRAM_GROUP_CHAT_ID);
 
+const PRIORITY_WEIGHTS: Record<string, number> = {
+  URGENT_IMPORTANT: 4,
+  IMPORTANT_NOT_URGENT: 2,
+  URGENT_NOT_IMPORTANT: 2,
+  NEITHER: 1,
+};
+
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (
@@ -24,8 +31,8 @@ export async function POST(request: NextRequest) {
       prisma.task.findMany({
         where: { status: { in: ["TODO", "IN_PROGRESS", "IN_REVIEW"] } },
         include: {
-          owner: { select: { name: true } },
-          project: { select: { name: true } },
+          owner: { select: { id: true, name: true } },
+          project: { select: { name: true, clientName: true } },
         },
         orderBy: { displayScore: "desc" },
       }),
@@ -39,7 +46,7 @@ export async function POST(request: NextRequest) {
           project: { select: { name: true } },
         },
       }),
-      prisma.user.findMany({ select: { name: true } }),
+      prisma.user.findMany({ select: { id: true, name: true } }),
     ]);
 
     // Group open tasks by assignee
@@ -53,6 +60,112 @@ export async function POST(request: NextRequest) {
     const overdue = openTasks.filter(
       (t) => t.deadline && t.deadline < now
     );
+
+    // --- WORKLOAD ANALYSIS ---
+    const workloadByPerson: { name: string; userId: string; taskCount: number; weightedLoad: number; lowestPriorityTask: string | null }[] = [];
+    let totalWeightedLoad = 0;
+
+    for (const user of users) {
+      const userTasks = openTasks.filter((t) => t.owner?.id === user.id);
+      const weighted = userTasks.reduce(
+        (sum, t) => sum + (PRIORITY_WEIGHTS[t.priority] ?? 1),
+        0
+      );
+      totalWeightedLoad += weighted;
+
+      const lowestPriority = userTasks
+        .sort((a, b) => (PRIORITY_WEIGHTS[a.priority] ?? 1) - (PRIORITY_WEIGHTS[b.priority] ?? 1))[0];
+
+      workloadByPerson.push({
+        name: user.name,
+        userId: user.id,
+        taskCount: userTasks.length,
+        weightedLoad: weighted,
+        lowestPriorityTask: lowestPriority?.title ?? null,
+      });
+    }
+
+    // Calculate percentages and find imbalances
+    const workloadAnalysis = workloadByPerson.map((w) => ({
+      ...w,
+      percentage: totalWeightedLoad > 0 ? Math.round((w.weightedLoad / totalWeightedLoad) * 100) : 0,
+    }));
+
+    const overloaded = workloadAnalysis.filter((w) => w.percentage > 40);
+    const underloaded = workloadAnalysis
+      .filter((w) => w.percentage < 25)
+      .sort((a, b) => a.percentage - b.percentage);
+
+    let workloadWarning: string | null = null;
+    if (overloaded.length > 0 && underloaded.length > 0) {
+      const heavy = overloaded[0];
+      const light = underloaded[0];
+      workloadWarning = `${heavy.name} is carrying ${heavy.percentage}% of the workload (${heavy.taskCount} tasks). Lightest: ${light.name} at ${light.percentage}%. Consider moving "${heavy.lowestPriorityTask}" to ${light.name}.`;
+    }
+
+    // Log workload for trend analysis (fire-and-forget)
+    for (const w of workloadAnalysis) {
+      prisma.workloadLog.create({
+        data: {
+          userId: w.userId,
+          userName: w.name,
+          taskCount: w.taskCount,
+          weightedLoad: w.weightedLoad,
+          percentage: w.percentage,
+        },
+      }).catch(() => {});
+    }
+
+    // --- CLIENT HEALTH ANALYSIS ---
+    const clientProjects = await prisma.project.findMany({
+      where: {
+        clientName: { not: null },
+        status: { in: ["ACTIVE", "IN_PROGRESS"] },
+      },
+      select: { id: true, name: true, clientName: true },
+    });
+
+    const clientHealthAlerts: string[] = [];
+
+    for (const project of clientProjects) {
+      const projectTasks = openTasks.filter(
+        (t) => t.project?.name === project.name
+      );
+      if (projectTasks.length === 0) continue;
+
+      const overdueTasks = projectTasks.filter(
+        (t) => t.deadline && t.deadline < now
+      );
+      const overduePercent = Math.round(
+        (overdueTasks.length / projectTasks.length) * 100
+      );
+
+      // Count deadline pushes from Decision records
+      const deadlinePushes = await prisma.decision.count({
+        where: {
+          summary: { contains: project.name, mode: "insensitive" },
+          createdAt: { gte: subDays(now, 30) },
+        },
+      });
+
+      // Days since last completed task in this project
+      const lastCompleted = await prisma.task.findFirst({
+        where: { projectId: project.id, status: "DONE" },
+        orderBy: { updatedAt: "desc" },
+        select: { updatedAt: true },
+      });
+      const daysSinceCompletion = lastCompleted
+        ? Math.floor((now.getTime() - lastCompleted.updatedAt.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      if (overduePercent >= 30 || deadlinePushes >= 2) {
+        const parts = [`${project.name} (${project.clientName})`];
+        if (overduePercent >= 30) parts.push(`${overdueTasks.length} overdue tasks (${overduePercent}%)`);
+        if (deadlinePushes >= 2) parts.push(`${deadlinePushes} deadline pushes this month`);
+        if (daysSinceCompletion && daysSinceCompletion > 7) parts.push(`${daysSinceCompletion} days since last completion`);
+        clientHealthAlerts.push(parts.join(" — "));
+      }
+    }
 
     const briefData = JSON.stringify({
       date: now.toISOString().split("T")[0],
@@ -80,6 +193,14 @@ export async function POST(request: NextRequest) {
         deadline: t.deadline?.toISOString().split("T")[0] ?? null,
         priority: t.priority,
       })),
+      workloadAnalysis: workloadAnalysis.map((w) => ({
+        name: w.name,
+        taskCount: w.taskCount,
+        weightedLoad: w.weightedLoad,
+        percentage: w.percentage,
+      })),
+      workloadWarning,
+      clientHealthAlerts: clientHealthAlerts.length > 0 ? clientHealthAlerts : null,
     });
 
     const anthropic = getAnthropicClient();
@@ -97,8 +218,10 @@ Format:
 - One-line summary of the day ahead
 - Each person's top 2-3 priorities for today (bullet points)
 - Any overdue items needing immediate attention
+- If workloadWarning is provided, include a workload rebalancing suggestion naturally
+- If clientHealthAlerts are provided, flag unhealthy client projects with a brief recommendation
 - One proactive suggestion or question for the team
-Keep it under 1200 characters.`,
+Keep it under 1500 characters.`,
       messages: [{ role: "user", content: briefData }],
     });
 
@@ -114,6 +237,8 @@ Keep it under 1200 characters.`,
       sent: true,
       openCount: openTasks.length,
       overdueCount: overdue.length,
+      workloadImbalance: overloaded.length > 0,
+      clientAlerts: clientHealthAlerts.length,
     });
   } catch (error) {
     console.error("Daily brief cron failed:", error);

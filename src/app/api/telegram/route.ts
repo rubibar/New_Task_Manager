@@ -113,6 +113,30 @@ async function findProjectByIdOrName(
   return null;
 }
 
+// --- Velocity Logging ---
+
+async function logVelocity(task: { id: string; title: string; createdAt: Date; ownerId: string; estimatedHours: number | null }) {
+  const now = new Date();
+  const actualDays = Math.max(1, Math.round((now.getTime() - task.createdAt.getTime()) / (1000 * 60 * 60 * 24)));
+  const estimatedDays = task.estimatedHours ? Math.max(1, Math.round(task.estimatedHours / 8)) : null;
+
+  const owner = await prisma.user.findUnique({
+    where: { id: task.ownerId },
+    select: { name: true },
+  });
+
+  await prisma.velocityLog.create({
+    data: {
+      taskId: task.id,
+      taskTitle: task.title,
+      estimatedDays,
+      actualDays,
+      assignee: owner?.name ?? "Unknown",
+    },
+  });
+  console.log("[Telegram Bot] Velocity logged:", task.title, `actual=${actualDays}d`, estimatedDays ? `est=${estimatedDays}d` : "no estimate");
+}
+
 // --- Main webhook ---
 
 export async function POST(request: NextRequest) {
@@ -530,6 +554,12 @@ async function handleUpdateTask(
 
   console.log("[Telegram Bot] Updating task", task.id, JSON.stringify(data));
   await prisma.task.update({ where: { id: task.id }, data });
+
+  // Log velocity when task is marked DONE
+  if (data.status === "DONE") {
+    logVelocity(task).catch(() => {});
+  }
+
   recalculateAndPersistScores();
 }
 

@@ -62,6 +62,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- BOTTLENECK DETECTION ---
+    const statusCounts = await prisma.task.groupBy({
+      by: ["status"],
+      where: { status: { in: ["TODO", "IN_PROGRESS", "IN_REVIEW"] } },
+      _count: { _all: true },
+    });
+
+    const inReviewCount = statusCounts.find((s) => s.status === "IN_REVIEW")?._count._all ?? 0;
+
+    if (inReviewCount > 3) {
+      const reviewTasks = await prisma.task.findMany({
+        where: { status: "IN_REVIEW" },
+        include: {
+          owner: { select: { name: true } },
+          reviewer: { select: { name: true } },
+        },
+        orderBy: { updatedAt: "asc" },
+      });
+
+      // Find who needs to review
+      const reviewerNames = new Set<string>();
+      for (const t of reviewTasks) {
+        if (t.reviewer?.name) reviewerNames.add(t.reviewer.name);
+        else if (t.owner?.name) reviewerNames.add(t.owner.name);
+      }
+
+      const names = Array.from(reviewerNames).join("/");
+      alerts.push(
+        `\u{1F6A7} ${inReviewCount} tasks are stuck in Review. ${names} \u2014 can we do a review session today?`
+      );
+    }
+
     if (alerts.length === 0) {
       return NextResponse.json({ success: true, sent: false, reason: "no stale tasks" });
     }
@@ -73,6 +105,7 @@ export async function POST(request: NextRequest) {
       success: true,
       sent: true,
       alertCount: alerts.length,
+      inReviewBottleneck: inReviewCount > 3,
     });
   } catch (error) {
     console.error("Stale tasks cron failed:", error);

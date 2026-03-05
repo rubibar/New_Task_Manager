@@ -46,6 +46,47 @@ export async function POST(request: NextRequest) {
     // Analyze 4-week patterns
     const patterns = await analyzePatterns();
 
+    // --- VELOCITY ANALYSIS ---
+    const velocityLogs = await prisma.velocityLog.findMany({
+      where: { completedAt: { gte: weekStart } },
+    });
+
+    let velocitySummary: string | null = null;
+    if (velocityLogs.length > 0) {
+      const avgActual = velocityLogs.reduce((sum, v) => sum + (v.actualDays ?? 0), 0) / velocityLogs.length;
+
+      const withEstimates = velocityLogs.filter((v) => v.estimatedDays != null && v.estimatedDays > 0);
+      if (withEstimates.length > 0) {
+        const avgEstimated = withEstimates.reduce((sum, v) => sum + (v.estimatedDays ?? 0), 0) / withEstimates.length;
+        const ratio = avgActual / avgEstimated;
+        if (ratio > 1.2) {
+          velocitySummary = `Average task completion: ${avgActual.toFixed(1)} days (estimated ${avgEstimated.toFixed(1)} — tasks are taking ${Math.round((ratio - 1) * 100)}% longer than planned)`;
+        } else if (ratio < 0.8) {
+          velocitySummary = `Average task completion: ${avgActual.toFixed(1)} days (estimated ${avgEstimated.toFixed(1)} — team is delivering ${Math.round((1 - ratio) * 100)}% faster than expected!)`;
+        } else {
+          velocitySummary = `Average task completion: ${avgActual.toFixed(1)} days — estimates are on point this week`;
+        }
+      } else {
+        velocitySummary = `Average task completion: ${avgActual.toFixed(1)} days this week (${velocityLogs.length} tasks)`;
+      }
+
+      // Per-person velocity
+      const byPerson: Record<string, { count: number; totalDays: number }> = {};
+      for (const v of velocityLogs) {
+        if (!byPerson[v.assignee]) byPerson[v.assignee] = { count: 0, totalDays: 0 };
+        byPerson[v.assignee].count++;
+        byPerson[v.assignee].totalDays += v.actualDays ?? 0;
+      }
+      const personVelocity = Object.entries(byPerson).map(([name, data]) => ({
+        name,
+        completed: data.count,
+        avgDays: data.totalDays / data.count,
+      }));
+      velocitySummary += "\n" + personVelocity
+        .map((p) => `${p.name}: ${p.completed} tasks, avg ${p.avgDays.toFixed(1)} days`)
+        .join(", ");
+    }
+
     const summary = JSON.stringify({
       completed: completedThisWeek.map((t) => ({
         title: t.title,
@@ -62,6 +103,7 @@ export async function POST(request: NextRequest) {
         emergency: t.emergency,
       })),
       patternInsights: patterns.summary,
+      velocitySummary,
     });
 
     const anthropic = getAnthropicClient();
@@ -78,10 +120,11 @@ This runs Wednesday afternoon before Thursday's planning meeting.
 Be warm, concise, direct. Max 2 emojis total.
 Format:
 - Quick recap: how many tasks completed this week, by who
+- If velocity data is provided, include the completion speed insight (estimates vs actuals)
 - Highlight anything still open that's urgent or overdue
-- If pattern insights are provided, weave ONE trend naturally into the message (e.g. "I notice Rubi's admin tasks keep slipping to Wednesday...")
+- If pattern insights are provided, weave ONE trend naturally into the message
 - One short nudge or encouragement for the team heading into planning
-Keep it under 1200 characters.`,
+Keep it under 1500 characters.`,
       messages: [
         {
           role: "user",
@@ -102,6 +145,7 @@ Keep it under 1200 characters.`,
       sent: true,
       completedCount: completedThisWeek.length,
       openCount: stillOpen.length,
+      velocityEntries: velocityLogs.length,
     });
   } catch (error) {
     console.error("Weekly wrap cron failed:", error);
