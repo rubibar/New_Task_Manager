@@ -450,6 +450,17 @@ model ChecklistItem {
   @@index([taskId])
 }
 
+model BotConversation {
+  id            String   @id @default(cuid())
+  chatId        String
+  pendingAction String
+  partialTask   Json?
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([chatId])
+}
+
 model TaskDependency {
   id          String   @id @default(cuid())
   taskId      String

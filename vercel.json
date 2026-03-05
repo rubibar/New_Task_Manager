@@ -15,6 +15,18 @@
     {
       "path": "/api/cron/recalculate-health-scores",
       "schedule": "0 7 * * 0-4"
+    },
+    {
+      "path": "/api/cron/morning-standup",
+      "schedule": "0 7 * * 0"
+    },
+    {
+      "path": "/api/cron/deadline-alert",
+      "schedule": "0 8 * * 0-4"
+    },
+    {
+      "path": "/api/cron/weekly-wrap",
+      "schedule": "0 15 * * 3"
     }
   ]
 }
