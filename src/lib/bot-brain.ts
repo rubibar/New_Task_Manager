@@ -166,7 +166,15 @@ taskData: { "clientName": string }
 The studio state already includes client data — use it to build a detailed response.
 
 "link_project_to_client" — Associate an existing project with a client
+Triggered by ANY of these patterns (and similar variations):
+- "add project X to client Y"
+- "link project X to client Y"
+- "project X belongs to client Y"
+- "X is a project for client Y"
+- "שייך פרויקט X ללקוח Y"
+- "תוסיף פרויקט X ללקוח Y"
 taskData: { "projectId": string | null, "projectName": string | null, "clientId": string | null, "clientName": string | null }
+After linking, confirm with project count: "Project [X] is now linked to [Y]. They now have [N] projects total."
 
 === PLANNING ACTIONS ===
 

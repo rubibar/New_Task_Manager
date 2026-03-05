@@ -464,7 +464,12 @@ export async function POST(request: NextRequest) {
         if (td) await handleDeleteClient(td);
         break;
       case "link_project_to_client":
-        if (td) await handleLinkProjectToClient(td);
+        if (td) {
+          const linkResult = await handleLinkProjectToClient(td);
+          if (linkResult && !botResponse.reply) {
+            botResponse.reply = `Project "${linkResult.projectName}" is now linked to ${linkResult.clientName}. They now have ${linkResult.totalProjects} project${linkResult.totalProjects === 1 ? "" : "s"} total.`;
+          }
+        }
         break;
     }
 
@@ -1209,30 +1214,45 @@ async function handleDeleteClient(taskData: Record<string, unknown>) {
   console.log("[Telegram Bot] Deleted client:", client.id, client.name);
 }
 
-async function handleLinkProjectToClient(taskData: Record<string, unknown>) {
+async function handleLinkProjectToClient(taskData: Record<string, unknown>): Promise<{ clientName: string; projectName: string; totalProjects: number } | null> {
+  console.log("[Telegram Bot] link_project_to_client: looking up client:", taskData.clientId ?? taskData.clientName);
   const client = await findClientByIdOrName(
     taskData.clientId as string | undefined,
     taskData.clientName as string | undefined
   );
   if (!client) {
-    console.log("[Telegram Bot] link_project_to_client: client not found", taskData.clientId, taskData.clientName);
-    return;
+    console.log("[Telegram Bot] link_project_to_client: CLIENT NOT FOUND — clientId:", taskData.clientId, "clientName:", taskData.clientName);
+    return null;
   }
+  console.log("[Telegram Bot] link_project_to_client: found client:", client.id, client.name);
 
+  console.log("[Telegram Bot] link_project_to_client: looking up project:", taskData.projectId ?? taskData.projectName);
   const project = await findProjectByIdOrName(
     taskData.projectId as string | undefined,
     taskData.projectName as string | undefined
   );
   if (!project) {
-    console.log("[Telegram Bot] link_project_to_client: project not found", taskData.projectId, taskData.projectName);
-    return;
+    console.log("[Telegram Bot] link_project_to_client: PROJECT NOT FOUND — projectId:", taskData.projectId, "projectName:", taskData.projectName);
+    return null;
   }
+  console.log("[Telegram Bot] link_project_to_client: found project:", project.id, project.name);
 
-  await prisma.project.update({
+  console.log("[Telegram Bot] link_project_to_client: connecting project", project.id, "to client", client.id);
+  const updated = await prisma.project.update({
     where: { id: project.id },
-    data: { clientId: client.id, clientName: client.name },
+    data: {
+      client: { connect: { id: client.id } },
+      clientName: client.name,
+    },
   });
-  console.log("[Telegram Bot] Linked project", project.id, project.name, "to client", client.id, client.name);
+  console.log("[Telegram Bot] link_project_to_client: SUCCESS — project.clientId is now:", updated.clientId, "clientName:", updated.clientName);
+
+  const totalProjects = await prisma.project.count({
+    where: { clientId: client.id },
+  });
+  console.log("[Telegram Bot] link_project_to_client: client", client.name, "now has", totalProjects, "projects total");
+
+  return { clientName: client.name, projectName: project.name, totalProjects };
 }
 
 // ==================== CONFLICT DETECTION ====================
