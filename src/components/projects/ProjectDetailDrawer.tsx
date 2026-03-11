@@ -5,18 +5,21 @@ import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/Button";
 import { ProjectInsightPanel } from "./ProjectInsightPanel";
 import { HealthScoreBreakdown } from "@/components/health/HealthScoreBreakdown";
+import { TaskRow } from "@/components/dashboard/TaskRow";
 import { useProjectHealthScore, recalculateProjectHealth } from "@/hooks/useHealthScores";
 import { useDeliverables, resequenceDeliverable } from "@/hooks/useDeliverables";
-import type { ProjectWithTasks } from "@/types";
+import { useTasks } from "@/hooks/useTasks";
+import type { ProjectWithTasks, TaskWithRelations } from "@/types";
 
 interface ProjectDetailDrawerProps {
   open: boolean;
   onClose: () => void;
   project: ProjectWithTasks | null;
   onEdit: () => void;
+  onTaskClick?: (task: TaskWithRelations) => void;
 }
 
-type Tab = "overview" | "deliverables" | "insights";
+type Tab = "overview" | "tasks" | "deliverables" | "insights";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Active",
@@ -35,15 +38,34 @@ const DELIVERABLE_STATUS_COLORS: Record<string, string> = {
   DELIVERED: "bg-emerald-100 text-emerald-700",
 };
 
+const STATUS_ORDER: Record<string, number> = {
+  IN_REVIEW: 0,
+  IN_PROGRESS: 1,
+  TODO: 2,
+  DONE: 3,
+};
+
+const STATUS_GROUP_LABELS: Record<string, string> = {
+  IN_REVIEW: "In Review",
+  IN_PROGRESS: "In Progress",
+  TODO: "To Do",
+  DONE: "Done",
+};
+
 export function ProjectDetailDrawer({
   open,
   onClose,
   project,
   onEdit,
+  onTaskClick,
 }: ProjectDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [doneExpanded, setDoneExpanded] = useState(false);
   const { score: healthScore, isLoading: healthLoading, refresh: refreshHealth } = useProjectHealthScore(project?.id ?? null);
   const { deliverables } = useDeliverables(project?.id ?? null);
+  const { tasks: projectTasks, isLoading: tasksLoading } = useTasks(
+    project?.id ? { projectId: project.id } : undefined
+  );
   const [recalculating, setRecalculating] = useState(false);
 
   const handleRecalculate = async () => {
@@ -65,8 +87,22 @@ export function ProjectDetailDrawer({
   const doneTasks = project.tasks.filter((t) => t.status === "DONE").length;
   const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
+  // Group tasks by status for the tasks tab
+  const sortedTasks = [...projectTasks].sort((a, b) => {
+    const statusDiff = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
+    if (statusDiff !== 0) return statusDiff;
+    return b.displayScore - a.displayScore;
+  });
+
+  const taskGroups = ["IN_REVIEW", "IN_PROGRESS", "TODO", "DONE"].map((status) => ({
+    status,
+    label: STATUS_GROUP_LABELS[status],
+    tasks: sortedTasks.filter((t) => t.status === status),
+  })).filter((g) => g.tasks.length > 0);
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
+    { key: "tasks", label: `Tasks (${totalTasks})` },
     { key: "deliverables", label: `Deliverables (${deliverables.length})` },
     { key: "insights", label: "AI Insights" },
   ];
@@ -235,6 +271,74 @@ export function ProjectDetailDrawer({
                 Edit Project
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Tasks Tab */}
+        {activeTab === "tasks" && (
+          <div className="space-y-3">
+            {tasksLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-10 bg-slate-50 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            ) : taskGroups.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center">
+                <p className="text-xs text-slate-400">No tasks in this project</p>
+              </div>
+            ) : (
+              taskGroups.map((group) => {
+                const isDone = group.status === "DONE";
+                const isExpanded = isDone ? doneExpanded : true;
+
+                return (
+                  <div key={group.status}>
+                    <div className="flex items-center gap-2 mb-1">
+                      {isDone ? (
+                        <button
+                          onClick={() => setDoneExpanded(!doneExpanded)}
+                          className="flex items-center gap-1.5 group"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className={`text-slate-400 transition-transform ${doneExpanded ? "rotate-90" : ""}`}
+                          >
+                            <path d="M9 18l6-6-6-6" />
+                          </svg>
+                          <span className="text-xs font-medium text-slate-500 group-hover:text-slate-700">
+                            {group.label}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="text-xs font-medium text-slate-600">
+                          {group.label}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-400">
+                        ({group.tasks.length})
+                      </span>
+                    </div>
+                    {isExpanded && (
+                      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
+                        {group.tasks.map((task) => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            onClick={() => onTaskClick?.(task)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
 

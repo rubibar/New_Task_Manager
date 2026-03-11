@@ -7,9 +7,10 @@ import { ProjectModal } from "@/components/projects/ProjectModal";
 import { ProjectWizard } from "@/components/projects/wizard/ProjectWizard";
 import { ProjectDetailDrawer } from "@/components/projects/ProjectDetailDrawer";
 import { DeliverableTemplateManager } from "@/components/projects/DeliverableTemplateManager";
+import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import type { Project, ProjectWithTasks } from "@/types";
+import type { Project, ProjectWithTasks, TaskWithRelations } from "@/types";
 
 export default function ProjectsPage() {
   const { projects, isLoading } = useProjects();
@@ -19,6 +20,7 @@ export default function ProjectsPage() {
   const [detailProject, setDetailProject] = useState<ProjectWithTasks | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectWithTasks | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
@@ -132,6 +134,13 @@ export default function ProjectsPage() {
         onClose={handleCloseDetail}
         project={detailProject}
         onEdit={handleEditFromDrawer}
+        onTaskClick={setSelectedTask}
+      />
+
+      <TaskDetailDrawer
+        task={selectedTask}
+        open={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
       />
 
       <ProjectModal
