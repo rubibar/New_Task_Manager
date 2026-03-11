@@ -8,17 +8,29 @@ import {
 import { prisma } from "@/lib/prisma";
 import type { ScoreBreakdown } from "@/types";
 
-// --- Factor 1: Deadline Proximity (0-35) ---
-// Quadratic curve: tasks further out score lower, overdue tasks score max.
-// 80 working hours ≈ 2 work weeks (10 days × 8h).
-const DEADLINE_MAX = 35;
-const DEADLINE_HORIZON = 80; // working hours
+// --- Factor 1: Deadline Proximity (0-50) ---
+// Non-overdue: quadratic curve from 0..35 over 80 working hours.
+// Overdue: base 35 + 2 per overdue working day, capped at 50.
+// This gives a 15-point spread between barely overdue and severely overdue.
+const DEADLINE_BASE_MAX = 35;
+const DEADLINE_OVERDUE_CAP = 50;
+const DEADLINE_HORIZON = 80; // working hours (~2 work weeks)
+const OVERDUE_PER_DAY = 2; // +2 per overdue working day (8h)
 
 function getDeadlineProximityScore(remainingHours: number): number {
-  if (remainingHours <= 0) return DEADLINE_MAX; // overdue → max
-  if (remainingHours >= DEADLINE_HORIZON) return 0; // >2 weeks → 0
+  if (remainingHours >= DEADLINE_HORIZON) return 0; // >2 weeks out → 0
+
+  if (remainingHours <= 0) {
+    // Overdue: base 35 + linear bonus per overdue working day
+    const overdueHours = Math.abs(remainingHours);
+    const overdueDays = Math.floor(overdueHours / 8);
+    const bonus = overdueDays * OVERDUE_PER_DAY;
+    return Math.min(DEADLINE_OVERDUE_CAP, DEADLINE_BASE_MAX + bonus);
+  }
+
+  // Approaching deadline: steeper curve (power 2.5 instead of 2)
   const normalized = remainingHours / DEADLINE_HORIZON; // 0..1
-  return Math.round(DEADLINE_MAX * Math.pow(1 - normalized, 2) * 10) / 10;
+  return Math.round(DEADLINE_BASE_MAX * Math.pow(1 - normalized, 2.5) * 10) / 10;
 }
 
 // --- Factor 2: Priority (0-25) ---

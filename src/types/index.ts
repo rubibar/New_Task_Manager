@@ -159,7 +159,7 @@ export type UserWithCapacity = Pick<
 >;
 
 export interface ScoreBreakdown {
-  deadlineProximity: number; // 0-35
+  deadlineProximity: number; // 0-50 (35 base + up to 15 overdue bonus)
   priority: number;          // 0-25
   taskType: number;          // 0-10
   status: number;            // 0-10
