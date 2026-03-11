@@ -3,7 +3,8 @@
 import type { Step1Data } from "./Step1Details";
 import type { Step2Data } from "./Step2Deliverables";
 import type { Step4Data, FolderNode } from "./Step4Folders";
-import type { ProjectType, TaskTemplateWithChecklist, UserWithCapacity } from "@/types";
+import type { ProjectType, TaskTemplateWithChecklist, UserWithCapacity, DeliverableTemplate } from "@/types";
+import type { DeliverableTemplateDefaultTask } from "@/types";
 
 interface Step5Props {
   step1Data: Step1Data;
@@ -11,6 +12,7 @@ interface Step5Props {
   step4Data: Step4Data;
   projectTypes: ProjectType[];
   templates: TaskTemplateWithChecklist[];
+  deliverableTemplates: DeliverableTemplate[];
   users: UserWithCapacity[];
   onJumpToStep: (step: number) => void;
 }
@@ -67,6 +69,7 @@ export function Step5Review({
   step4Data,
   projectTypes,
   templates,
+  deliverableTemplates,
   users,
   onJumpToStep,
 }: Step5Props) {
@@ -74,6 +77,9 @@ export function Step5Review({
   const selectedTemplates = templates.filter((t) =>
     step2Data.selectedTemplateIds.includes(t.id)
   );
+  const selectedDelTemplates = deliverableTemplates
+    .filter((t) => step2Data.selectedDeliverableTemplateIds?.includes(t.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
   const validDeliverables = step2Data.deliverables.filter((d) => d.name.trim());
   const validCustomTasks = step2Data.customTasks.filter((t) => t.name.trim());
   const getUserName = (id: string) =>
@@ -192,7 +198,39 @@ export function Step5Review({
         </div>
       </div>
 
-      {/* Deliverables */}
+      {/* Pipeline Deliverable Templates */}
+      {selectedDelTemplates.length > 0 && (
+        <div className="rounded-lg border border-slate-200 p-4">
+          <SectionHeader
+            title={`Pipeline Deliverables (${selectedDelTemplates.length})`}
+            step={2}
+            onEdit={() => onJumpToStep(2)}
+          />
+          <div className="space-y-1.5">
+            {selectedDelTemplates.map((dt) => {
+              const taskCount = (dt.defaultTasks as unknown as DeliverableTemplateDefaultTask[])?.length || 0;
+              return (
+                <div
+                  key={dt.id}
+                  className="flex items-center justify-between text-xs bg-[#C8FF00]/10 rounded px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-700 font-medium">{dt.name}</span>
+                    <span className="text-[10px] text-slate-400">
+                      {CATEGORY_LABELS[dt.phase] || dt.phase}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {taskCount} task{taskCount !== 1 ? "s" : ""} + dependencies
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Manual Deliverables */}
       <div className="rounded-lg border border-slate-200 p-4">
         <SectionHeader
           title={`Deliverables (${validDeliverables.length})`}

@@ -6,6 +6,7 @@ import { ProjectCard } from "@/components/projects/ProjectCard";
 import { ProjectModal } from "@/components/projects/ProjectModal";
 import { ProjectWizard } from "@/components/projects/wizard/ProjectWizard";
 import { ProjectDetailDrawer } from "@/components/projects/ProjectDetailDrawer";
+import { DeliverableTemplateManager } from "@/components/projects/DeliverableTemplateManager";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import type { Project, ProjectWithTasks } from "@/types";
@@ -117,6 +118,9 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
+
+      {/* Deliverable Template Manager */}
+      <DeliverableTemplateManager />
 
       <ProjectWizard
         open={wizardOpen}

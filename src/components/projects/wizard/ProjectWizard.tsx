@@ -12,9 +12,11 @@ import { Step4Folders, type Step4Data } from "./Step4Folders";
 import { Step5Review } from "./Step5Review";
 import { useProjectTypes } from "@/hooks/useProjectTypes";
 import { useTaskTemplates } from "@/hooks/useTaskTemplates";
+import { useDeliverableTemplates } from "@/hooks/useDeliverableTemplates";
 // useClientNames kept for backward compat but Step1 now uses useClients internally
 import { createProject } from "@/hooks/useProjects";
 import type { UserWithCapacity } from "@/types";
+import type { DeliverableTemplateDefaultTask } from "@/types";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -45,6 +47,7 @@ const defaultStep1: Step1Data = {
 const defaultStep2: Step2Data = {
   deliverables: [],
   selectedTemplateIds: [],
+  selectedDeliverableTemplateIds: [],
   customTasks: [],
 };
 
@@ -151,6 +154,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
 
   const { projectTypes } = useProjectTypes();
   const { templates } = useTaskTemplates();
+  const { templates: deliverableTemplates } = useDeliverableTemplates();
   // clientNames no longer needed — Step1Details uses useClients internally
   const { data: users } = useSWR<UserWithCapacity[]>("/api/users", fetcher);
 
@@ -234,7 +238,78 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
         color: step1Data.color,
       });
 
-      // 2. Create deliverables
+      // 2a. Auto-generate deliverables from selected templates
+      const selectedDelTemplates = deliverableTemplates
+        .filter((t) => step2Data.selectedDeliverableTemplateIds.includes(t.id))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+
+      // Track created deliverables + their tasks for cross-deliverable dependency chaining
+      const createdDeliverableGroups: { deliverableId: string; taskIds: string[] }[] = [];
+
+      for (const tmpl of selectedDelTemplates) {
+        // Create the deliverable
+        const delRes = await fetch("/api/deliverables", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: project.id,
+            name: tmpl.name,
+            dueDate: step1Data.targetFinishDate || new Date().toISOString().split("T")[0],
+          }),
+        });
+        const deliverable = await delRes.json();
+
+        // Create default tasks under this deliverable
+        const defaultTasks = ((tmpl.defaultTasks as unknown as DeliverableTemplateDefaultTask[]) || [])
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+
+        const taskIds: string[] = [];
+        for (const dt of defaultTasks) {
+          const taskRes = await fetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: dt.title,
+              type: dt.phase === "ADMIN" ? "ADMIN" : "CLIENT",
+              priority: "IMPORTANT_NOT_URGENT",
+              ownerId: users?.[0]?.id,
+              projectId: project.id,
+              deliverableId: deliverable.id,
+              category: dt.phase,
+            }),
+          });
+          const task = await taskRes.json();
+          taskIds.push(task.id);
+        }
+
+        // Chain intra-deliverable dependencies (linear chain within this deliverable)
+        for (let i = 1; i < taskIds.length; i++) {
+          await fetch(`/api/tasks/${taskIds[i]}/dependencies`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dependsOnId: taskIds[i - 1] }),
+          });
+        }
+
+        createdDeliverableGroups.push({ deliverableId: deliverable.id, taskIds });
+      }
+
+      // Chain cross-deliverable dependencies (last task of N → first task of N+1)
+      for (let i = 1; i < createdDeliverableGroups.length; i++) {
+        const prevGroup = createdDeliverableGroups[i - 1];
+        const currGroup = createdDeliverableGroups[i];
+        if (prevGroup.taskIds.length > 0 && currGroup.taskIds.length > 0) {
+          const lastTaskOfPrev = prevGroup.taskIds[prevGroup.taskIds.length - 1];
+          const firstTaskOfCurr = currGroup.taskIds[0];
+          await fetch(`/api/tasks/${firstTaskOfCurr}/dependencies`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dependsOnId: lastTaskOfPrev }),
+          });
+        }
+      }
+
+      // 2b. Create manual deliverables
       const validDeliverables = step2Data.deliverables.filter(
         (d) => d.name.trim()
       );
@@ -409,6 +484,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
               data={step2Data}
               onChange={setStep2Data}
               templates={templates}
+              deliverableTemplates={deliverableTemplates}
               users={users || []}
             />
           )}
@@ -438,6 +514,7 @@ export function ProjectWizard({ open, onClose }: ProjectWizardProps) {
               step4Data={step4Data}
               projectTypes={projectTypes}
               templates={templates}
+              deliverableTemplates={deliverableTemplates}
               users={users || []}
               onJumpToStep={goToStep}
             />

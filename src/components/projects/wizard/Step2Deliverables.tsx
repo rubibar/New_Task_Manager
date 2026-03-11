@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import type { TaskTemplateWithChecklist, UserWithCapacity } from "@/types";
+import type { TaskTemplateWithChecklist, UserWithCapacity, DeliverableTemplate } from "@/types";
+import type { DeliverableTemplateDefaultTask } from "@/types";
 
 export interface DeliverableInput {
   name: string;
@@ -24,6 +25,7 @@ export interface CustomTaskInput {
 export interface Step2Data {
   deliverables: DeliverableInput[];
   selectedTemplateIds: string[];
+  selectedDeliverableTemplateIds: string[];
   customTasks: CustomTaskInput[];
 }
 
@@ -31,6 +33,7 @@ interface Step2Props {
   data: Step2Data;
   onChange: (data: Step2Data) => void;
   templates: TaskTemplateWithChecklist[];
+  deliverableTemplates: DeliverableTemplate[];
   users: UserWithCapacity[];
 }
 
@@ -82,14 +85,31 @@ const emptyCustomTask: CustomTaskInput = {
   dueDate: "",
 };
 
+const PHASE_ORDER_LIST = ["PRE_PRODUCTION", "PRODUCTION", "POST_PRODUCTION", "ADMIN"] as const;
+
+function groupDeliverableTemplates(templates: DeliverableTemplate[]) {
+  const groups: Record<string, DeliverableTemplate[]> = {};
+  for (const t of templates) {
+    if (!groups[t.phase]) groups[t.phase] = [];
+    groups[t.phase].push(t);
+  }
+  // Sort within each group by sortOrder
+  for (const phase of Object.keys(groups)) {
+    groups[phase].sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  return groups;
+}
+
 export function Step2Deliverables({
   data,
   onChange,
   templates,
+  deliverableTemplates,
   users,
 }: Step2Props) {
   const [showAddTask, setShowAddTask] = useState(false);
   const grouped = groupTemplates(templates);
+  const groupedDelTemplates = groupDeliverableTemplates(deliverableTemplates);
 
   const addDeliverable = () => {
     onChange({
@@ -166,9 +186,153 @@ export function Step2Deliverables({
     });
   };
 
+  const toggleDeliverableTemplate = (id: string) => {
+    const selected = new Set(data.selectedDeliverableTemplateIds);
+    if (selected.has(id)) {
+      selected.delete(id);
+    } else {
+      selected.add(id);
+    }
+    onChange({ ...data, selectedDeliverableTemplateIds: Array.from(selected) });
+  };
+
+  const toggleDeliverablePhase = (phase: string) => {
+    const phaseIds = (groupedDelTemplates[phase] || []).map((t) => t.id);
+    const allSelected = phaseIds.every((id) =>
+      data.selectedDeliverableTemplateIds.includes(id)
+    );
+    const selected = new Set(data.selectedDeliverableTemplateIds);
+    for (const id of phaseIds) {
+      if (allSelected) {
+        selected.delete(id);
+      } else {
+        selected.add(id);
+      }
+    }
+    onChange({ ...data, selectedDeliverableTemplateIds: Array.from(selected) });
+  };
+
   return (
     <div className="space-y-8">
-      {/* Deliverables Section */}
+      {/* Deliverable Templates Section */}
+      {deliverableTemplates.length > 0 && (
+        <div>
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-slate-800">
+              Pipeline Deliverables
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Select deliverable templates to auto-generate with default tasks
+              and dependencies
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {PHASE_ORDER_LIST.map((phase) => {
+              const phaseTemplates = groupedDelTemplates[phase];
+              if (!phaseTemplates?.length) return null;
+
+              const phaseIds = phaseTemplates.map((t) => t.id);
+              const allSelected = phaseIds.every((id) =>
+                data.selectedDeliverableTemplateIds.includes(id)
+              );
+              const someSelected = phaseIds.some((id) =>
+                data.selectedDeliverableTemplateIds.includes(id)
+              );
+
+              return (
+                <div
+                  key={phase}
+                  className="rounded-lg border border-slate-200 overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleDeliverablePhase(phase)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+                  >
+                    <div
+                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                        allSelected
+                          ? "bg-[#C8FF00] border-[#C8FF00]"
+                          : someSelected
+                          ? "bg-[#C8FF00]/30 border-[#C8FF00]"
+                          : "border-slate-300"
+                      }`}
+                    >
+                      {(allSelected || someSelected) && (
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={allSelected ? "#1e293b" : "#65a30d"}
+                          strokeWidth="3"
+                        >
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700">
+                      {CATEGORY_LABELS[phase] || phase}
+                    </span>
+                    <span className="text-[10px] text-slate-400 ml-auto">
+                      {phaseIds.filter((id) => data.selectedDeliverableTemplateIds.includes(id)).length}
+                      /{phaseIds.length}
+                    </span>
+                  </button>
+
+                  <div className="divide-y divide-slate-100">
+                    {phaseTemplates.map((tmpl) => {
+                      const isSelected = data.selectedDeliverableTemplateIds.includes(tmpl.id);
+                      const taskCount = (tmpl.defaultTasks as unknown as DeliverableTemplateDefaultTask[])?.length || 0;
+
+                      return (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          onClick={() => toggleDeliverableTemplate(tmpl.id)}
+                          className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 transition-colors ${
+                            isSelected ? "bg-[#C8FF00]/5" : ""
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                              isSelected
+                                ? "bg-[#C8FF00] border-[#C8FF00]"
+                                : "border-slate-300"
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="#1e293b"
+                                strokeWidth="3"
+                              >
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="text-xs text-slate-700 flex-1">
+                            {tmpl.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {taskCount} task{taskCount !== 1 ? "s" : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Manual Deliverables Section */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>

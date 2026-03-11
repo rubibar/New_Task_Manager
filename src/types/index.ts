@@ -31,6 +31,7 @@ import type {
   ChecklistItem,
   TemplateChecklistItem,
   TaskDependency,
+  DeliverableTemplate,
 } from "@prisma/client";
 
 export type {
@@ -66,7 +67,14 @@ export type {
   ChecklistItem,
   TemplateChecklistItem,
   TaskDependency,
+  DeliverableTemplate,
 };
+
+export interface DeliverableTemplateDefaultTask {
+  title: string;
+  phase: TaskTemplateCategory;
+  sortOrder: number;
+}
 
 export type TaskWithRelations = Task & {
   owner: Pick<User, "id" | "name" | "email" | "image">;
