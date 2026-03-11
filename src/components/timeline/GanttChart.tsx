@@ -15,7 +15,7 @@ import {
 } from "date-fns";
 import type { TaskWithRelations } from "@/types";
 import type { Milestone } from "@prisma/client";
-import { getTaskColor } from "@/lib/utils";
+import { getTaskColor, getDateProgress } from "@/lib/utils";
 import { ScoreBadge } from "@/components/tasks/ScoreBadge";
 import {
   DependencyArrows,
@@ -488,8 +488,8 @@ export function GanttChart({
                         left: pos.left,
                         width: Math.max(pos.width, DAY_WIDTH),
                         height: ROW_HEIGHT - 8,
-                        backgroundColor: getTaskColor(task.project?.color ?? null, task.category ?? null),
-                        borderColor: getTaskColor(task.project?.color ?? null, task.category ?? null),
+                        backgroundColor: getTaskColor(task.project?.color ?? null, task.category ?? null, getDateProgress(task.startDate, task.deadline, task.project?.startDate, task.project?.targetFinishDate)),
+                        borderColor: getTaskColor(task.project?.color ?? null, task.category ?? null, getDateProgress(task.startDate, task.deadline, task.project?.startDate, task.project?.targetFinishDate)),
                       }}
                       title={`${task.title} (${format(taskStart, "MMM d")} - ${format(taskEnd, "MMM d")})${isLocked ? " [Locked]" : ""}`}
                     >

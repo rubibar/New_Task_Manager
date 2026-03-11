@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     include: {
       owner: { select: { id: true, name: true, email: true, image: true } },
       reviewer: { select: { id: true, name: true, email: true, image: true } },
-      project: { select: { id: true, name: true, color: true } },
+      project: { select: { id: true, name: true, color: true, startDate: true, targetFinishDate: true } },
       checklistItems: { select: { id: true, completed: true } },
       deliverable: { select: { id: true, name: true } },
       dependencies: { select: { dependsOnId: true } },
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     include: {
       owner: { select: { id: true, name: true, email: true, image: true } },
       reviewer: { select: { id: true, name: true, email: true, image: true } },
-      project: { select: { id: true, name: true, color: true } },
+      project: { select: { id: true, name: true, color: true, startDate: true, targetFinishDate: true } },
       checklistItems: { select: { id: true, completed: true } },
       deliverable: { select: { id: true, name: true } },
     },

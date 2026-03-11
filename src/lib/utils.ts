@@ -164,28 +164,84 @@ function hslToHex(h: number, s: number, l: number): string {
 
 const DEFAULT_NO_PROJECT_COLOR = "#D4A574"; // warm amber/sand for unassigned tasks
 
+/**
+ * Get task color based on project color, phase category, and optional date position.
+ *
+ * Two-axis color system:
+ * - Axis 1 (phase): PRE_PRODUCTION lighter, PRODUCTION base, POST_PRODUCTION darker, ADMIN desaturated
+ * - Axis 2 (date): tasks closer to project start are lighter, tasks further are darker (within ±8L range)
+ *
+ * @param dateProgress — 0..1 representing how far the task is through the project timeline.
+ *   0 = project start, 1 = project end. Omit or pass undefined for no date gradient.
+ */
 export function getTaskColor(
   projectColor: string | null | undefined,
-  category: string | null | undefined
+  category: string | null | undefined,
+  dateProgress?: number | null
 ): string {
   const baseHex = projectColor || DEFAULT_NO_PROJECT_COLOR;
 
-  if (!category) return baseHex;
-
   const hsl = hexToHSL(baseHex);
 
+  // Phase-based lightness shift
+  let lightnessShift = 0;
+  let saturationMultiplier = 1;
   switch (category) {
     case "PRE_PRODUCTION":
-      return hslToHex(hsl.h, hsl.s, Math.min(hsl.l + 30, 95));
+      lightnessShift = 30;
+      break;
     case "PRODUCTION":
-      return baseHex;
+      lightnessShift = 0;
+      break;
     case "POST_PRODUCTION":
-      return hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 20, 10));
+      lightnessShift = -20;
+      break;
     case "ADMIN":
-      return hslToHex(hsl.h, Math.max(hsl.s * 0.5, 0), hsl.l);
-    default:
-      return baseHex;
+      saturationMultiplier = 0.5;
+      break;
   }
+
+  // Date-based lightness shift: ±8L range within the phase
+  // Early tasks (+8L lighter), late tasks (-8L darker)
+  let dateLightnessShift = 0;
+  if (dateProgress != null && projectColor) {
+    // dateProgress 0→1 maps to +8→-8 lightness
+    dateLightnessShift = 8 - dateProgress * 16;
+  }
+
+  const finalL = Math.max(10, Math.min(95, hsl.l + lightnessShift + dateLightnessShift));
+  const finalS = Math.max(0, hsl.s * saturationMultiplier);
+
+  // If no category and no date progress, return base color unchanged
+  if (!category && dateProgress == null) return baseHex;
+
+  return hslToHex(hsl.h, finalS, finalL);
+}
+
+/**
+ * Compute date progress (0..1) for a task within its project timeline.
+ * Returns null if insufficient data (no project dates or no task dates).
+ */
+export function getDateProgress(
+  taskStartDate: Date | string | null | undefined,
+  taskDeadline: Date | string | null | undefined,
+  projectStartDate: Date | string | null | undefined,
+  projectEndDate: Date | string | null | undefined
+): number | null {
+  if (!taskStartDate || !projectStartDate || !projectEndDate) return null;
+
+  const projStart = new Date(projectStartDate).getTime();
+  const projEnd = new Date(projectEndDate).getTime();
+  const projDuration = projEnd - projStart;
+
+  if (projDuration <= 0) return null;
+
+  // Use the task's midpoint for a stable position
+  const tStart = new Date(taskStartDate).getTime();
+  const tEnd = taskDeadline ? new Date(taskDeadline).getTime() : tStart;
+  const taskMid = (tStart + tEnd) / 2;
+
+  return Math.max(0, Math.min(1, (taskMid - projStart) / projDuration));
 }
 
 export function getCategoryLabel(category: string | null | undefined): string {

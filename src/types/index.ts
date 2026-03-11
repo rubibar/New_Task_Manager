@@ -79,7 +79,7 @@ export interface DeliverableTemplateDefaultTask {
 export type TaskWithRelations = Task & {
   owner: Pick<User, "id" | "name" | "email" | "image">;
   reviewer: Pick<User, "id" | "name" | "email" | "image"> | null;
-  project: Pick<Project, "id" | "name" | "color"> | null;
+  project: Pick<Project, "id" | "name" | "color" | "startDate" | "targetFinishDate"> | null;
   checklistItems?: Pick<ChecklistItem, "id" | "completed">[];
   deliverable?: Pick<Deliverable, "id" | "name"> | null;
   dependencies?: (TaskDependency & { dependsOn: Pick<Task, "id" | "title" | "status"> })[];
