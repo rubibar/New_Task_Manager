@@ -7,12 +7,9 @@ import { useTasks } from "@/hooks/useTasks";
 import { useFilters } from "@/hooks/useFilters";
 import { useBatchSelection } from "@/hooks/useBatchSelection";
 import { TodaysFocus } from "@/components/dashboard/TodaysFocus";
-import { MyTasks } from "@/components/dashboard/MyTasks";
 import { ActiveProjectsSummary } from "@/components/dashboard/ActiveProjectsSummary";
 import { TeamWorkload } from "@/components/dashboard/TeamWorkload";
 import { QuickActions } from "@/components/dashboard/QuickActions";
-import { Spotlight } from "@/components/dashboard/Spotlight";
-import { HeatmapGrid } from "@/components/dashboard/HeatmapGrid";
 import { ReviewBar } from "@/components/dashboard/ReviewBar";
 import { StatusBanner } from "@/components/dashboard/StatusBanner";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
@@ -21,6 +18,7 @@ import { BatchActionBar } from "@/components/tasks/BatchActionBar";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Button } from "@/components/ui/Button";
 import { ProjectWizard } from "@/components/projects/wizard/ProjectWizard";
+import { TaskRow } from "@/components/dashboard/TaskRow";
 import type { TaskWithRelations } from "@/types";
 
 export default function DashboardPage() {
@@ -29,13 +27,12 @@ export default function DashboardPage() {
   const { tasks, isLoading } = useTasks();
   const { filters, updateFilter, clearFilters, hasActiveFilters, activeFilterCount, applyFilters } = useFilters();
   const batch = useBatchSelection();
-  const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(
-    null
-  );
+  const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [view, setView] = useState<"overview" | "tasks">("overview");
+  const [teamExpanded, setTeamExpanded] = useState(true);
 
   const userId = (session as unknown as Record<string, unknown>)?.userId as
     | string
@@ -47,8 +44,8 @@ export default function DashboardPage() {
     .filter((t) => t.status !== "DONE")
     .sort((a, b) => b.displayScore - a.displayScore);
 
-  const topTask = activeTasks[0] || null;
-  const restTasks = activeTasks.slice(1);
+  const myTasks = activeTasks.filter((t) => t.ownerId === userId);
+  const teamTasks = activeTasks.filter((t) => t.ownerId !== userId);
 
   if (!session) {
     return (
@@ -74,21 +71,14 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="rounded-xl border-2 border-slate-100 p-6 animate-pulse">
+        <div className="rounded-xl border border-slate-100 p-6 animate-pulse">
           <div className="h-4 bg-slate-100 rounded w-24 mb-3" />
           <div className="h-6 bg-slate-100 rounded w-64 mb-4" />
           <div className="h-4 bg-slate-100 rounded w-48" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-lg border border-slate-100 p-4 animate-pulse"
-            >
-              <div className="h-4 bg-slate-100 rounded w-3/4 mb-3" />
-              <div className="h-3 bg-slate-100 rounded w-1/2 mb-2" />
-              <div className="h-3 bg-slate-100 rounded w-1/3" />
-            </div>
+            <div key={i} className="h-12 bg-slate-50 rounded-lg animate-pulse" />
           ))}
         </div>
       </div>
@@ -145,56 +135,56 @@ export default function DashboardPage() {
       <StatusBanner />
 
       {view === "overview" ? (
-        <>
-          {/* Overview layout: two columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left column: 2/3 width */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Today's Focus AI Briefing */}
-              <TodaysFocus userName={userName} tasks={activeTasks} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column: 2/3 width */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Today's Focus AI Briefing */}
+            <TodaysFocus userName={userName} tasks={activeTasks} />
 
-              {/* Spotlight top task */}
-              <Spotlight
-                task={topTask}
-                onClick={() => topTask && setSelectedTask(topTask)}
-              />
+            {/* My Tasks — slim rows */}
+            <TaskSection
+              title="My Tasks"
+              count={myTasks.length}
+              tasks={myTasks}
+              onTaskClick={setSelectedTask}
+              batchMode={batchMode}
+              isSelected={batch.isSelected}
+              onToggleSelect={batch.toggle}
+            />
 
-              {/* My Tasks */}
-              {userId && (
-                <MyTasks
-                  tasks={tasks}
-                  currentUserId={userId}
-                  onTaskClick={setSelectedTask}
-                />
-              )}
-            </div>
-
-            {/* Right column: 1/3 width */}
-            <div className="space-y-6">
-              {/* Quick Actions */}
-              <QuickActions
-                onNewTask={() => setCreateOpen(true)}
-                onNewProject={() => setProjectWizardOpen(true)}
-              />
-
-              {/* Review Bar */}
-              {userId && (
-                <ReviewBar tasks={tasks} currentUserId={userId} />
-              )}
-
-              {/* Active Projects */}
-              <ActiveProjectsSummary
-                onProjectClick={() => router.push("/projects")}
-              />
-
-              {/* Team Workload */}
-              <TeamWorkload tasks={tasks} />
-            </div>
+            {/* Team Tasks — collapsible slim rows */}
+            <TaskSection
+              title="Team Tasks"
+              count={teamTasks.length}
+              tasks={teamTasks}
+              onTaskClick={setSelectedTask}
+              collapsible
+              expanded={teamExpanded}
+              onToggleExpand={() => setTeamExpanded(!teamExpanded)}
+              batchMode={batchMode}
+              isSelected={batch.isSelected}
+              onToggleSelect={batch.toggle}
+            />
           </div>
-        </>
+
+          {/* Right column: 1/3 width */}
+          <div className="space-y-6">
+            <QuickActions
+              onNewTask={() => setCreateOpen(true)}
+              onNewProject={() => setProjectWizardOpen(true)}
+            />
+            {userId && (
+              <ReviewBar tasks={tasks} currentUserId={userId} />
+            )}
+            <ActiveProjectsSummary
+              onProjectClick={() => router.push("/projects")}
+            />
+            <TeamWorkload tasks={tasks} />
+          </div>
+        </div>
       ) : (
         <>
-          {/* Tasks view (original layout) */}
+          {/* All Tasks view */}
           <FilterBar
             filters={filters}
             onFilterChange={updateFilter}
@@ -205,53 +195,30 @@ export default function DashboardPage() {
 
           <div className="flex gap-6">
             <div className="flex-1 min-w-0 space-y-6">
-              <Spotlight
-                task={topTask}
-                onClick={() => topTask && setSelectedTask(topTask)}
+              {/* My Tasks */}
+              <TaskSection
+                title="My Tasks"
+                count={myTasks.length}
+                tasks={myTasks}
+                onTaskClick={setSelectedTask}
+                batchMode={batchMode}
+                isSelected={batch.isSelected}
+                onToggleSelect={batch.toggle}
               />
 
-              {/* Owner-first sorting: My Tasks then Team Tasks */}
-              {(() => {
-                const myTasks = restTasks.filter(t => t.ownerId === userId);
-                const teamTasks = restTasks.filter(t => t.ownerId !== userId);
-                return (
-                  <>
-                    {myTasks.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <h2 className="text-sm font-semibold text-slate-800">My Tasks</h2>
-                          <span className="text-xs text-slate-400">({myTasks.length})</span>
-                        </div>
-                        <HeatmapGrid
-                          tasks={myTasks}
-                          onTaskClick={setSelectedTask}
-                          selectable={batchMode}
-                          isSelected={batch.isSelected}
-                          onToggleSelect={batch.toggle}
-                        />
-                      </div>
-                    )}
-
-                    {teamTasks.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-3 mt-6">
-                          <div className="flex-1 h-px bg-slate-200" />
-                          <h2 className="text-sm font-semibold text-slate-500">Team Tasks</h2>
-                          <span className="text-xs text-slate-400">({teamTasks.length})</span>
-                          <div className="flex-1 h-px bg-slate-200" />
-                        </div>
-                        <HeatmapGrid
-                          tasks={teamTasks}
-                          onTaskClick={setSelectedTask}
-                          selectable={batchMode}
-                          isSelected={batch.isSelected}
-                          onToggleSelect={batch.toggle}
-                        />
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+              {/* Team Tasks */}
+              <TaskSection
+                title="Team Tasks"
+                count={teamTasks.length}
+                tasks={teamTasks}
+                onTaskClick={setSelectedTask}
+                collapsible
+                expanded={teamExpanded}
+                onToggleExpand={() => setTeamExpanded(!teamExpanded)}
+                batchMode={batchMode}
+                isSelected={batch.isSelected}
+                onToggleSelect={batch.toggle}
+              />
             </div>
 
             {userId && (
@@ -279,7 +246,6 @@ export default function DashboardPage() {
         onClose={() => setProjectWizardOpen(false)}
       />
 
-      {/* Batch Action Bar */}
       <BatchActionBar
         selectedCount={batch.count}
         selectedIds={batch.selectedIds}
@@ -290,6 +256,82 @@ export default function DashboardPage() {
         allTaskIds={activeTasks.map((t) => t.id)}
         onSelectAll={batch.selectAll}
       />
+    </div>
+  );
+}
+
+// ---- Task Section Component ----
+function TaskSection({
+  title,
+  count,
+  tasks,
+  onTaskClick,
+  collapsible = false,
+  expanded = true,
+  onToggleExpand,
+  batchMode = false,
+  isSelected,
+  onToggleSelect,
+}: {
+  title: string;
+  count: number;
+  tasks: TaskWithRelations[];
+  onTaskClick: (task: TaskWithRelations) => void;
+  collapsible?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  batchMode?: boolean;
+  isSelected?: (id: string) => boolean;
+  onToggleSelect?: (id: string) => void;
+}) {
+  if (count === 0) return null;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        {collapsible ? (
+          <button
+            onClick={onToggleExpand}
+            className="flex items-center gap-2 group"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`}
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+            <h2 className="text-sm font-semibold text-slate-500 group-hover:text-slate-700">
+              {title}
+            </h2>
+          </button>
+        ) : (
+          <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+        )}
+        <span className="text-xs text-slate-400">({count})</span>
+        {collapsible && (
+          <div className="flex-1 h-px bg-slate-200" />
+        )}
+      </div>
+
+      {(!collapsible || expanded) && (
+        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
+          {tasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              onClick={() => onTaskClick(task)}
+              selectable={batchMode}
+              selected={isSelected?.(task.id) ?? false}
+              onToggleSelect={() => onToggleSelect?.(task.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
