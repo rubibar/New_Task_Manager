@@ -165,7 +165,7 @@ export function FilterBar({
   }));
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-2 flex-nowrap overflow-x-auto pb-1 sm:flex-wrap sm:overflow-x-visible sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
       {/* Search */}
       <div className="relative">
         <svg
@@ -185,7 +185,7 @@ export function FilterBar({
           value={filters.search}
           onChange={(e) => onFilterChange("search", e.target.value)}
           placeholder="Search..."
-          className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs w-44 focus:outline-none focus:ring-2 focus:ring-[#C8FF00] focus:border-transparent"
+          className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs w-32 sm:w-44 focus:outline-none focus:ring-2 focus:ring-[#C8FF00] focus:border-transparent"
         />
       </div>
 
@@ -215,8 +215,8 @@ export function FilterBar({
         onChange={(v) => onFilterChange("priorities", v)}
       />
 
-      {/* Date range */}
-      <div className="flex items-center gap-1">
+      {/* Date range — hidden on mobile */}
+      <div className="hidden sm:flex items-center gap-1">
         <input
           type="date"
           value={filters.dateFrom}

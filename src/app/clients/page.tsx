@@ -260,7 +260,7 @@ function CreateClientModal({
     <Modal open={open} onClose={handleClose} title="New Client" maxWidth="max-w-xl">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Row 1: Name + Email */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>
               Name <span className="text-red-500">*</span>
@@ -287,7 +287,7 @@ function CreateClientModal({
         </div>
 
         {/* Row 2: Contact + Phone */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Contact Person</label>
             <input
@@ -311,7 +311,7 @@ function CreateClientModal({
         </div>
 
         {/* Row 3: Client Type + Source */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Client Type</label>
             <select
@@ -345,7 +345,7 @@ function CreateClientModal({
         </div>
 
         {/* Row 4: Industry + Status */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Industry</label>
             <input
@@ -675,7 +675,9 @@ export default function ClientsPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    typeof window !== "undefined" && window.innerWidth < 640 ? "cards" : "table"
+  );
   const [createOpen, setCreateOpen] = useState(false);
 
   const { clients, isLoading } = useClients({
@@ -719,22 +721,25 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       {/* ---- Header ---- */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold text-slate-800">Clients</h1>
-        <Button onClick={() => setCreateOpen(true)}>+ New Client</Button>
+        <Button onClick={() => setCreateOpen(true)} size="sm">
+          <span className="sm:hidden">+</span>
+          <span className="hidden sm:inline">+ New Client</span>
+        </Button>
       </div>
 
       {/* ---- Search + Filters + View toggle ---- */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         {/* Search */}
-        <div className="relative">
+        <div className="relative flex-1 sm:flex-none">
           <SearchIcon />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search clients..."
-            className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs w-56 focus:outline-none focus:ring-2 focus:ring-[#C8FF00] focus:border-transparent"
+            className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-[#C8FF00] focus:border-transparent"
           />
         </div>
 

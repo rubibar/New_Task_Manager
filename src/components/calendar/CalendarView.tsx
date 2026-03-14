@@ -152,7 +152,7 @@ function DayDetailPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="w-72 flex-shrink-0 border border-slate-200 rounded-lg overflow-hidden bg-white self-start">
+    <div className="w-full md:w-72 flex-shrink-0 border border-slate-200 rounded-lg overflow-hidden bg-white self-start">
       <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-800">
@@ -329,28 +329,40 @@ export function CalendarView({
   }, [currentDate, viewMode]);
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekDaysMobile = ["S", "M", "T", "W", "T", "F", "S"];
 
   return (
-    <div className="flex gap-4">
+    <div className="flex flex-col md:flex-row gap-4">
       <div className="flex-1 min-w-0 border border-slate-200 rounded-lg overflow-hidden bg-white">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
-          <button
-            onClick={goPrev}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-slate-800">{headerLabel}</h2>
+        <div className="flex flex-col sm:flex-row items-center justify-between px-3 sm:px-4 py-2 sm:py-3 gap-2 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
             <button
-              onClick={goToday}
-              className="text-[10px] px-2 py-0.5 rounded bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+              onClick={goPrev}
+              className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 active:bg-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
-              Today
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-slate-800">{headerLabel}</h2>
+              <button
+                onClick={goToday}
+                className="text-[10px] px-2 py-0.5 rounded bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+              >
+                Today
+              </button>
+            </div>
+
+            <button
+              onClick={goNext}
+              className="p-2 rounded-lg text-slate-500 hover:bg-slate-200 active:bg-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
             </button>
           </div>
 
@@ -364,7 +376,7 @@ export function CalendarView({
                     setViewMode(mode);
                     setSelectedDay(null);
                   }}
-                  className={`px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                  className={`px-2.5 py-1.5 sm:py-1 text-[10px] font-medium transition-colors ${
                     viewMode === mode
                       ? "bg-[#C8FF00] text-slate-900"
                       : "text-slate-500 hover:bg-slate-100"
@@ -379,7 +391,7 @@ export function CalendarView({
             {unscheduledTasks.length > 0 && (
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className={`text-[10px] px-2 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+                className={`text-[10px] px-2 py-1.5 sm:py-1 rounded-lg transition-colors flex items-center gap-1 ${
                   sidebarOpen
                     ? "bg-[#C8FF00] text-slate-900"
                     : "text-slate-500 hover:bg-slate-200"
@@ -394,15 +406,6 @@ export function CalendarView({
                 {unscheduledTasks.length}
               </button>
             )}
-
-            <button
-              onClick={goNext}
-              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 transition-colors"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </button>
           </div>
         </div>
 
@@ -410,9 +413,10 @@ export function CalendarView({
         {viewMode === "monthly" && (
           <>
             <div className="grid grid-cols-7 border-b border-slate-200">
-              {weekDays.map((d) => (
+              {weekDays.map((d, i) => (
                 <div key={d} className="py-2 text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                  {d}
+                  <span className="hidden sm:inline">{d}</span>
+                  <span className="sm:hidden">{weekDaysMobile[i]}</span>
                 </div>
               ))}
             </div>
@@ -431,7 +435,7 @@ export function CalendarView({
                   <div
                     key={key}
                     className={`
-                      min-h-[100px] border-b border-r border-slate-100 p-1
+                      min-h-[60px] sm:min-h-[100px] border-b border-r border-slate-100 p-1
                       transition-colors duration-100 cursor-pointer
                       ${!inMonth ? "bg-slate-50/50" : ""}
                       ${isDropHere ? "bg-[#C8FF00]/10 ring-2 ring-inset ring-[#C8FF00]/40" : ""}
@@ -528,7 +532,7 @@ export function CalendarView({
                   <div
                     key={key}
                     className={`
-                      min-h-[400px] border-r border-slate-100 last:border-r-0 p-2
+                      min-h-[200px] sm:min-h-[400px] border-r border-slate-100 last:border-r-0 p-1 sm:p-2
                       transition-colors duration-100
                       ${!workDay ? "bg-slate-50/40" : ""}
                       ${today ? "bg-red-50/20" : ""}
@@ -576,7 +580,7 @@ export function CalendarView({
           return (
             <div
               className={`
-                min-h-[500px] p-4
+                min-h-[300px] sm:min-h-[500px] p-3 sm:p-4
                 ${isDropHere ? "bg-[#C8FF00]/10" : ""}
               `}
               onDragOver={(e) => handleDragOver(e, key)}
@@ -691,7 +695,7 @@ export function CalendarView({
 
       {/* Unscheduled sidebar */}
       {unscheduledTasks.length > 0 && sidebarOpen && !(viewMode === "monthly" && selectedDay) && (
-        <div className="w-56 flex-shrink-0 border border-slate-200 rounded-lg overflow-hidden bg-white self-start">
+        <div className="w-full md:w-56 flex-shrink-0 border border-slate-200 rounded-lg overflow-hidden bg-white self-start">
           <div className="px-3 py-2 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-slate-600">Unscheduled</h3>

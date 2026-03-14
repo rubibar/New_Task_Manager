@@ -65,7 +65,7 @@ export function KanbanBoard({ tasks, onTaskClick, onStatusChange, selectable, is
   };
 
   return (
-    <div className="grid grid-cols-4 gap-4 min-h-[calc(100vh-200px)]">
+    <div className="flex md:grid md:grid-cols-4 gap-3 md:gap-4 min-h-[calc(100vh-200px)] overflow-x-auto pb-2 snap-x snap-mandatory md:snap-none -mx-4 px-4 md:mx-0 md:px-0">
       {COLUMNS.map((column) => {
         const columnTasks = getColumnTasks(column.status);
         const isOver = dragOverColumn === column.status;
@@ -79,6 +79,7 @@ export function KanbanBoard({ tasks, onTaskClick, onStatusChange, selectable, is
             onDrop={!selectable ? (e) => handleDrop(e, column.status) : undefined}
             className={`
               flex flex-col rounded-xl border transition-all duration-150
+              min-w-[75vw] sm:min-w-[50vw] md:min-w-0 snap-center
               ${column.bg}
               ${
                 isOver

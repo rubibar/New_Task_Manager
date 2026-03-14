@@ -88,14 +88,14 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-800">Dashboard</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold text-slate-800 shrink-0">Dashboard</h1>
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
           {/* View toggle */}
-          <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
+          <div className="flex items-center bg-slate-100 rounded-lg p-0.5 shrink-0">
             <button
               onClick={() => setView("overview")}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              className={`text-xs px-2 sm:px-3 py-1.5 rounded-md transition-colors ${
                 view === "overview"
                   ? "bg-white text-slate-800 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
@@ -105,7 +105,7 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setView("tasks")}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              className={`text-xs px-2 sm:px-3 py-1.5 rounded-md transition-colors whitespace-nowrap ${
                 view === "tasks"
                   ? "bg-white text-slate-800 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
@@ -119,7 +119,7 @@ export default function DashboardPage() {
               setBatchMode(!batchMode);
               if (batchMode) batch.clearSelection();
             }}
-            className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+            className={`text-xs px-2 sm:px-3 py-1.5 rounded-lg transition-colors shrink-0 hidden sm:block ${
               batchMode
                 ? "bg-[#C8FF00] text-slate-900"
                 : "text-slate-500 hover:bg-slate-100"
@@ -127,7 +127,10 @@ export default function DashboardPage() {
           >
             {batchMode ? "Exit Select" : "Select"}
           </button>
-          <Button onClick={() => setCreateOpen(true)}>+ New Task</Button>
+          <Button onClick={() => setCreateOpen(true)} size="sm" className="shrink-0">
+            <span className="sm:hidden">+</span>
+            <span className="hidden sm:inline">+ New Task</span>
+          </Button>
         </div>
       </div>
 

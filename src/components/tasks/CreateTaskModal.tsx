@@ -173,7 +173,7 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
         </div>
 
         {/* Type + Priority row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Type *"
             options={taskTypes}
@@ -189,7 +189,7 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
         </div>
 
         {/* Owner + Reviewer row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Owner *"
             options={userOptions}
@@ -205,7 +205,7 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
         </div>
 
         {/* Project + Phase row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Project"
             options={projectOptions}
@@ -234,7 +234,7 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
         )}
 
         {/* Dates row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DatePicker
             label="Start Date"
             value={startDate}

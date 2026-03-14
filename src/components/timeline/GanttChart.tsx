@@ -354,13 +354,13 @@ export function GanttChart({
   return (
     <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
       {/* Controls */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 bg-slate-50">
-        <span className="text-xs text-slate-500">View:</span>
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-slate-200 bg-slate-50 overflow-x-auto">
+        <span className="text-xs text-slate-500 shrink-0">View:</span>
         {[2, 4, 8].map((w) => (
           <button
             key={w}
             onClick={() => setViewWeeks(w)}
-            className={`text-xs px-2 py-1 rounded ${
+            className={`text-xs px-2 py-1 rounded shrink-0 ${
               viewWeeks === w
                 ? "bg-slate-800 text-white"
                 : "text-slate-500 hover:bg-slate-200"
@@ -369,11 +369,9 @@ export function GanttChart({
             {w}w
           </button>
         ))}
-        {onTaskDatesChange && (
-          <span className="text-[10px] text-slate-400 ml-auto">
-            Drag bars to reschedule
-          </span>
-        )}
+        <span className="text-[10px] text-slate-400 ml-auto shrink-0 hidden sm:inline">
+          {onTaskDatesChange ? "Drag bars to reschedule" : "Scroll to explore"}
+        </span>
       </div>
 
       <div ref={containerRef} className="overflow-x-auto">

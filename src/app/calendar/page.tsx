@@ -33,17 +33,18 @@ export default function CalendarPage() {
     return (
       <div className="space-y-4">
         <div className="h-8 bg-slate-100 rounded w-48 animate-pulse" />
-        <div className="h-[600px] bg-slate-50 rounded-lg border border-slate-100 animate-pulse" />
+        <div className="h-[300px] sm:h-[600px] bg-slate-50 rounded-lg border border-slate-100 animate-pulse" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold text-slate-800">Calendar</h1>
         <Button onClick={() => setCreateOpen(true)} size="sm">
-          + New Task
+          <span className="sm:hidden">+</span>
+          <span className="hidden sm:inline">+ New Task</span>
         </Button>
       </div>
 

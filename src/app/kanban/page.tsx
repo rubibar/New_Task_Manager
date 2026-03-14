@@ -38,11 +38,11 @@ export default function KanbanPage() {
     return (
       <div className="space-y-4">
         <div className="h-8 bg-slate-100 rounded w-48 animate-pulse" />
-        <div className="grid grid-cols-4 gap-4">
+        <div className="flex md:grid md:grid-cols-4 gap-3 md:gap-4 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-[500px] bg-slate-50 rounded-xl border border-slate-100 animate-pulse"
+              className="h-[500px] min-w-[75vw] sm:min-w-[50vw] md:min-w-0 bg-slate-50 rounded-xl border border-slate-100 animate-pulse"
             />
           ))}
         </div>

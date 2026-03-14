@@ -207,7 +207,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
         </div>
 
         {/* Type + Priority row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Type *"
             options={taskTypes}
@@ -223,7 +223,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
         </div>
 
         {/* Owner + Reviewer row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Owner *"
             options={userOptions}
@@ -239,7 +239,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
         </div>
 
         {/* Project + Phase row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Project"
             options={projectOptions}
@@ -268,7 +268,7 @@ export function TaskEditModal({ task, open, onClose }: TaskEditModalProps) {
         )}
 
         {/* Dates row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DatePicker
             label="Start Date"
             value={startDate}

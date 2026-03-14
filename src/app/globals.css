@@ -44,3 +44,48 @@ body {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* Safe area padding for mobile notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Hide scrollbar on mobile horizontal scroll areas */
+@media (max-width: 639px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .overflow-x-auto::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Snap scroll support */
+.snap-x {
+  scroll-snap-type: x mandatory;
+}
+.snap-center {
+  scroll-snap-align: center;
+}
+.snap-none {
+  scroll-snap-type: none;
+}
+
+/* Prevent text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Touch action for better scrolling */
+@media (max-width: 767px) {
+  .overflow-x-auto {
+    touch-action: pan-x;
+  }
+}

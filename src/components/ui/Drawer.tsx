@@ -45,13 +45,13 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="relative bg-white w-full max-w-md shadow-2xl overflow-y-auto"
+            className="relative bg-white w-full max-w-md shadow-2xl overflow-y-auto pb-safe"
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
-              <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800 truncate mr-2">{title}</h2>
               <button
                 onClick={onClose}
-                className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+                className="text-slate-400 hover:text-slate-600 transition-colors p-2 -mr-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
               >
                 <svg
                   width="20"
@@ -65,7 +65,7 @@ export function Drawer({ open, onClose, title, children }: DrawerProps) {
                 </svg>
               </button>
             </div>
-            <div className="px-6 py-4">{children}</div>
+            <div className="px-4 sm:px-6 py-4">{children}</div>
           </motion.div>
         </div>
       )}

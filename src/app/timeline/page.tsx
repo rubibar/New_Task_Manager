@@ -35,17 +35,17 @@ export default function TimelinePage() {
     return (
       <div className="space-y-4">
         <div className="h-8 bg-slate-100 rounded w-48 animate-pulse" />
-        <div className="h-[400px] bg-slate-50 rounded-lg border border-slate-100 animate-pulse" />
+        <div className="h-[250px] sm:h-[400px] bg-slate-50 rounded-lg border border-slate-100 animate-pulse" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold text-slate-800">Timeline</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Group by:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span className="text-xs text-slate-500 hidden sm:inline">Group by:</span>
           <button
             onClick={() => setGroupBy("project")}
             className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
